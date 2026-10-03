@@ -140,10 +140,7 @@ function boxBlurChannel(src: Float32Array, w: number, h: number, radius: number)
   return out;
 }
 
-/**
- * Soften only the alpha edge of a transparent cutout.
- * RGB stays unchanged so product color is preserved.
- */
+/** Soften only the alpha edge of a transparent cutout. */
 export function featherCutoutCanvas(
   source: CanvasImageSource,
   width: number,
@@ -236,10 +233,7 @@ export type RemoveResult = {
   resultUrl: string;
 };
 
-/**
- * Remove background on-device, feather the edge, place on pure white.
- * Returns both the transparent cutout (for live re-feather) and the white PNG.
- */
+/** Remove background on-device, feather the edge, place on pure white. */
 export async function removeToWhite(
   file: File,
   onProgress: (p: number, msg: string) => void,
@@ -280,4 +274,152 @@ export async function removeToWhite(
     URL.revokeObjectURL(cutoutUrl);
     throw error;
   }
+}
+
+/** CRC32 for ZIP (STORE method). */
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[i] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(data: Uint8Array): number {
+  let c = 0xffffffff;
+  for (let i = 0; i < data.length; i++) c = CRC_TABLE[(c ^ data[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function u16(n: number): Uint8Array {
+  const b = new Uint8Array(2);
+  b[0] = n & 0xff;
+  b[1] = (n >>> 8) & 0xff;
+  return b;
+}
+
+function u32(n: number): Uint8Array {
+  const b = new Uint8Array(4);
+  b[0] = n & 0xff;
+  b[1] = (n >>> 8) & 0xff;
+  b[2] = (n >>> 16) & 0xff;
+  b[3] = (n >>> 24) & 0xff;
+  return b;
+}
+
+function concat(parts: Uint8Array[]): Uint8Array {
+  let len = 0;
+  for (const p of parts) len += p.length;
+  const out = new Uint8Array(len);
+  let off = 0;
+  for (const p of parts) {
+    out.set(p, off);
+    off += p.length;
+  }
+  return out;
+}
+
+/** Build a ZIP (STORE) from named binary files — no extra dependency. */
+export function buildZip(files: { name: string; data: Uint8Array }[]): Blob {
+  const localParts: Uint8Array[] = [];
+  const centralParts: Uint8Array[] = [];
+  let offset = 0;
+
+  for (const file of files) {
+    const nameBytes = new TextEncoder().encode(file.name);
+    const crc = crc32(file.data);
+    const size = file.data.length;
+
+    const localHeader = concat([
+      u32(0x04034b50),
+      u16(20),
+      u16(0),
+      u16(0),
+      u16(0),
+      u16(0),
+      u32(crc),
+      u32(size),
+      u32(size),
+      u16(nameBytes.length),
+      u16(0),
+      nameBytes,
+    ]);
+
+    localParts.push(localHeader, file.data);
+
+    const central = concat([
+      u32(0x02014b50),
+      u16(20),
+      u16(20),
+      u16(0),
+      u16(0),
+      u16(0),
+      u16(0),
+      u32(crc),
+      u32(size),
+      u32(size),
+      u16(nameBytes.length),
+      u16(0),
+      u16(0),
+      u16(0),
+      u16(0),
+      u32(0),
+      u32(offset),
+      nameBytes,
+    ]);
+    centralParts.push(central);
+    offset += localHeader.length + size;
+  }
+
+  const centralDir = concat(centralParts);
+  const end = concat([
+    u32(0x06054b50),
+    u16(0),
+    u16(0),
+    u16(files.length),
+    u16(files.length),
+    u32(centralDir.length),
+    u32(offset),
+    u16(0),
+  ]);
+
+  const zipBytes = concat([...localParts, centralDir, end]);
+  return new Blob([zipBytes], { type: "application/zip" });
+}
+
+/** Download every ready white PNG as one ZIP. */
+export async function downloadAllAsZip(
+  items: { fileName: string; resultUrl: string }[],
+): Promise<void> {
+  const files: { name: string; data: Uint8Array }[] = [];
+  const used = new Set<string>();
+
+  for (const item of items) {
+    const res = await fetch(item.resultUrl);
+    const buf = new Uint8Array(await res.arrayBuffer());
+    let base = (item.fileName.replace(/\.[^.]+$/, "") || "photo").replace(/[^\w\-]+/g, "_");
+    if (!base) base = "photo";
+    let name = `${base}-white.png`;
+    let n = 2;
+    while (used.has(name)) {
+      name = `${base}-white-${n}.png`;
+      n += 1;
+    }
+    used.add(name);
+    files.push({ name, data: buf });
+  }
+
+  if (files.length === 0) return;
+
+  const blob = buildZip(files);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "paperwhite.zip";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
