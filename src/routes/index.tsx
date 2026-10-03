@@ -21,14 +21,14 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Remove photo backgrounds locally and replace them with pure white. Free, private, and watermark-free. Perfect for product photos. Upload up to 15 images at once.",
+          "Free forever white background tool. Remove photo backgrounds in your browser. Easy to use, private, no account. Upload up to 15 images at once.",
       },
       { name: "theme-color", content: "#f7f5f0" },
       { name: "robots", content: "index, follow" },
       { property: "og:title", content: "Paperwhite — Free White Background Maker" },
       {
         property: "og:description",
-        content: "A free private tool that removes backgrounds and puts your photo on pure white. Up to 15 images at once.",
+        content: "Free forever. Easy white backgrounds in your browser. Private, no account, up to 15 images at once.",
       },
       { property: "og:type", content: "website" },
       { property: "og:url", content: LIVE_URL },
@@ -37,7 +37,7 @@ export const Route = createFileRoute("/")({
       { name: "twitter:title", content: "Paperwhite — Free White Background Maker" },
       {
         name: "twitter:description",
-        content: "Remove backgrounds in your browser. Pure white output. No upload. No watermark. Batch up to 15.",
+        content: "Free forever white backgrounds. Runs in your browser. No upload. No account. Batch up to 15.",
       },
     ],
     links: [{ rel: "canonical", href: LIVE_URL }],
@@ -261,14 +261,14 @@ function Index() {
       <main className="mx-auto max-w-[1240px] px-4 py-7 sm:px-6 sm:py-10">
         <section className="mb-7 flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-            {["100% free, no account", "Runs in your browser", "Up to 15 photos at once"].map((item) => (
+            {["Free forever, no account", "Easy — drop and download", "Up to 15 photos at once"].map((item) => (
               <span key={item} className="flex items-center gap-2 text-foreground/70">
                 <span className="grid size-4 place-items-center rounded-full bg-accent text-[10px] font-semibold text-accent-foreground"><Check size={11} /></span>
                 {item}
               </span>
             ))}
           </div>
-          <span className="text-[11px] font-medium text-muted-foreground">No watermark. No limits.</span>
+          <span className="text-[11px] font-medium text-muted-foreground">Free forever. No limits.</span>
         </section>
 
         <section id="tool" className="grid grid-cols-1 gap-5 lg:grid-cols-[1.35fr_1fr]">
@@ -279,7 +279,7 @@ function Index() {
                   Drop a photo.<br className="hidden sm:block" /> Get it on white.
                 </h1>
                 <p className="mt-1.5 max-w-[48ch] text-[15px] text-muted-foreground">
-                  A neat cutout on fresh white studio paper — no cloud, no watermark, no cost. Batch up to 15.
+                  Drop a photo, get pure white. Free forever, private, and simple. Batch up to 15.
                 </p>
               </div>
               <span className="hidden rounded-md bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground lg:block">10 MB each · 15 max</span>
@@ -398,7 +398,7 @@ function Index() {
             <div id="privacy" className="rounded-[14px] bg-card p-5 ring-1 ring-border">
               <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Why it’s trusted</p>
               <ul className="mt-3 space-y-2.5 text-sm">
-                {["Nothing leaves your device — processing is local.", "Free and unlimited, with no watermark.", "Pure white output, ready for any store.", "Batch up to 15 product photos in one go."].map((item) => (
+                {["Nothing leaves your device — processing is local.", "Free forever — no account, no fees.", "Pure white output, ready for any store.", "Batch up to 15 product photos in one go."].map((item) => (
                   <li key={item} className="flex gap-2.5">
                     <Check className="mt-0.5 shrink-0 text-primary" size={16} />
                     <span className="text-foreground/70">{item}</span>
@@ -420,7 +420,7 @@ function Index() {
 
         <footer className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5 font-mono text-[11px] text-muted-foreground">
           <p>Pure white is #ffffff. Every time.</p>
-          <p>Paperwhite · free background removal</p>
+          <p>Paperwhite · free forever</p>
         </footer>
       </main>
     </div>
