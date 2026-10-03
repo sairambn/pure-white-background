@@ -8,20 +8,21 @@ Everything runs in the browser. Your image never leaves the device. No account, 
 
 ## Features
 
+- Upload up to **15 images** at once
 - Drag and drop, file browse, or paste from clipboard
 - Client-side background removal (IMG.LY model)
 - Pure white studio output every time
-- PNG download ready for product listings and stores
+- Per-image PNG download
 - Large images auto-scaled for mobile stability
 - Keyboard accessible drop zone
 - Works on desktop and mobile
 
 ## How it works
 
-1. Drop a PNG, JPG, or WebP (max 10 MB)
-2. The model cuts out the subject on your device
+1. Drop up to 15 PNG, JPG, or WebP files (10 MB each)
+2. Each image is processed one by one on your device
 3. The cutout is placed on a pure white canvas
-4. Download a clean PNG
+4. Download each ready PNG
 
 ## Stack
 
@@ -57,11 +58,12 @@ Requires Node 18+.
 ```
 src/
   routes/
-    index.tsx      # Tool UI + processing logic
+    index.tsx      # Tool UI + batch queue
     __root.tsx     # Shell, fonts, meta, error boundaries
+  lib/
+    paperwhite.ts  # Image prep + background removal
   components/ui/   # Shared UI primitives
   assets/          # Before / after example images
-  lib/             # Utilities and error helpers
 public/
   favicon.svg
   robots.txt
@@ -71,6 +73,7 @@ public/
 
 - [x] Production build
 - [x] Upload → remove → white canvas → download
+- [x] Batch up to 15 images
 - [x] Desktop and mobile layouts
 - [x] Paste support and keyboard access
 - [x] Large image safety
@@ -80,6 +83,7 @@ public/
 
 - Output is always PNG with a solid `#ffffff` background
 - Model downloads on first use and is cached by the browser
+- Images process one at a time to keep the browser stable
 - HEIC is not supported — export as JPG or PNG first
 
 MIT · Built for real product photos.
