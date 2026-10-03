@@ -13,6 +13,7 @@ import {
   isAllowedImage,
   removeToWhite,
   compositeOnWhite,
+  downloadAllAsZip,
   type WorkItem,
 } from "@/lib/paperwhite";
 
@@ -60,6 +61,7 @@ function Index() {
   const [batchError, setBatchError] = useState("");
   const [featherPx, setFeatherPx] = useState(FEATHER_DEFAULT);
   const featherRef = useRef(FEATHER_DEFAULT);
+  const [zipping, setZipping] = useState(false);
 
   useEffect(() => {
     itemsRef.current = items;
@@ -69,7 +71,6 @@ function Index() {
     featherRef.current = featherPx;
   }, [featherPx]);
 
-  // Live re-composite when edge feather changes (no model re-run)
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
@@ -90,7 +91,7 @@ function Index() {
             }),
           );
         } catch {
-          // Keep previous result if re-feather fails
+          // keep previous result
         }
       }
     };
@@ -285,6 +286,21 @@ function Index() {
   const doneCount = items.filter((it) => it.status === "done").length;
   const processingCount = items.filter((it) => it.status === "processing" || it.status === "queued").length;
   const isIdle = items.length === 0;
+  const readyItems = items.filter((it) => it.status === "done" && it.resultUrl);
+
+  const handleDownloadZip = async () => {
+    if (readyItems.length === 0 || zipping) return;
+    setZipping(true);
+    try {
+      await downloadAllAsZip(
+        readyItems.map((it) => ({ fileName: it.fileName, resultUrl: it.resultUrl! })),
+      );
+    } catch {
+      setBatchError("Could not build the ZIP. Try again.");
+    } finally {
+      setZipping(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -402,10 +418,19 @@ function Index() {
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="text-sm text-muted-foreground">
-                      {doneCount} of {items.length} ready
-                      {processingCount > 0 ? ` · ${processingCount} in progress` : ""}
+                      {processingCount > 0
+                        ? `Working… ${doneCount}/${items.length}`
+                        : doneCount === items.length
+                          ? `${doneCount} ready`
+                          : `${doneCount} of ${items.length} ready`}
                     </p>
                     <div className="flex flex-wrap gap-2">
+                      {readyItems.length > 0 && (
+                        <Button variant="accent" type="button" onClick={() => void handleDownloadZip()} disabled={zipping}>
+                          <Download size={15} />
+                          {zipping ? "Zipping…" : readyItems.length === 1 ? "Download ZIP" : `Download ZIP (${readyItems.length})`}
+                        </Button>
+                      )}
                       {items.length < MAX_FILES && (
                         <Button variant="outline" type="button" onClick={() => inputRef.current?.click()}>
                           <ImagePlus size={15} />
@@ -482,7 +507,7 @@ function Index() {
               <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Output</p>
               <dl className="mt-3 space-y-2 text-sm">
                 <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Format</dt><dd className="font-medium">PNG on pure white</dd></div>
-                <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Batch</dt><dd className="font-medium">Up to 15 images</dd></div>
+                <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Download</dt><dd className="font-medium">One ZIP file</dd></div>
                 <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Privacy</dt><dd className="font-medium">On-device</dd></div>
               </dl>
             </div>
@@ -499,8 +524,6 @@ function Index() {
 }
 
 function ItemCard({ item, onRemove }: { item: WorkItem; onRemove: () => void }) {
-  const outputName = `${item.fileName.replace(/\.[^.]+$/, "") || "paperwhite"}-white.png`;
-
   return (
     <div className="overflow-hidden rounded-[12px] bg-background/60 ring-1 ring-border">
       <div className="relative grid grid-cols-2 gap-px bg-border">
@@ -547,14 +570,8 @@ function ItemCard({ item, onRemove }: { item: WorkItem; onRemove: () => void }) 
             <div className="h-full rounded-full bg-primary transition-[width] duration-500" style={{ width: `${item.status === "queued" ? 2 : item.progress}%` }} />
           </div>
         )}
-        <p className="text-xs text-muted-foreground">{item.message}</p>
-        {item.resultUrl && (
-          <Button variant="accent" size="sm" asChild className="w-full">
-            <a href={item.resultUrl} download={outputName}>
-              <Download size={14} />
-              Download PNG
-            </a>
-          </Button>
+        {item.status === "error" && (
+          <p className="text-xs text-destructive">{item.message}</p>
         )}
       </div>
     </div>
