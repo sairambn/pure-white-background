@@ -64,6 +64,25 @@ export function isAllowedImage(file: File): { ok: true } | { ok: false; reason: 
   return { ok: true };
 }
 
+function drawWatermark(ctx: CanvasRenderingContext2D, width: number, height: number) {
+  const text = "thiru";
+  const fontSize = Math.max(12, Math.round(Math.min(width, height) * 0.035));
+  const padding = Math.max(8, Math.round(fontSize * 0.6));
+
+  ctx.save();
+  ctx.font = `500 ${fontSize}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+  ctx.textAlign = "right";
+  ctx.textBaseline = "bottom";
+
+  // Soft shadow so it stays readable on white
+  ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
+  ctx.fillText(text, width - padding + 0.5, height - padding + 0.5);
+
+  ctx.fillStyle = "rgba(40, 40, 40, 0.55)";
+  ctx.fillText(text, width - padding, height - padding);
+  ctx.restore();
+}
+
 export async function removeToWhite(
   file: File,
   onProgress: (p: number, msg: string) => void,
@@ -106,6 +125,7 @@ export async function removeToWhite(
     context.fillStyle = "#ffffff";
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(image, 0, 0);
+    drawWatermark(context, canvas.width, canvas.height);
 
     const whiteBlob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob(
