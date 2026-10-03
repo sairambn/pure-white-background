@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Finish a clean build with no errors.
-- [ ] Test the full upload, background-removal, and download flow.
-- [ ] Check desktop and mobile layouts for visual issues.
-- [ ] Fix any issues found and verify again.
+- [x] Finish a clean build with no errors.
+- [x] Test the full upload, background-removal, and download flow.
+- [x] Check desktop and mobile layouts for visual issues.
+- [x] Fix any issues found and verify again.
