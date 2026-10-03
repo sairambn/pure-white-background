@@ -1,24 +1,67 @@
-# Pure White Background
+# Paperwhite
 
-i want to build an software product where alll background is removed background should be white make it sure it is best and good all free
+Free private tool that removes photo backgrounds and puts the subject on pure white (#ffffff).
 
-This project was built with [Lovable](https://lovable.dev).
+Everything runs in the browser. Your image never leaves the device. No account, no watermark, no usage limits.
 
-## Build with Lovable
+**Live demo** — open the project and run it locally, or continue in the [Lovable editor](https://lovable.dev/projects/49c6a45a-0195-441a-8ea8-7131ad8baa72).
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/49c6a45a-0195-441a-8ea8-7131ad8baa72).
+## What it does
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+1. Drop a PNG, JPG or WebP (max 10 MB).
+2. The IMG.LY model cuts out the subject on your device.
+3. The cutout is placed on a pure white canvas.
+4. Download a clean PNG ready for product listings, stores or print.
 
-## Development
+## Stack
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+- TanStack Start + React 19 + TypeScript
+- Vite + Tailwind CSS v4
+- `@imgly/background-removal` (client-side, isnet_quint8 model)
+- Local processing only — no server upload
+
+## Quick start
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
+git clone https://github.com/sairambn/pure-white-background.git
+cd pure-white-background
+npm install
 npm run dev
 ```
+
+Open the URL shown in the terminal (usually http://localhost:5173).
+
+```sh
+npm run build
+npm run preview
+```
+
+## Project structure
+
+```
+src/
+  routes/
+    index.tsx      # Main tool UI + processing logic
+    __root.tsx     # Shell, fonts, meta, error boundaries
+  components/ui/   # Shared UI primitives
+  assets/          # Example before/after images
+  lib/             # Utilities and error helpers
+public/
+  favicon.svg
+  robots.txt
+```
+
+## Roadmap status
+
+- [x] Clean production build
+- [x] Full upload → remove → white canvas → download flow
+- [x] Desktop and mobile layouts checked
+- [x] Issues fixed and re-verified
+
+## Notes
+
+- Processing is 100 % client-side. Photos stay on the user’s device.
+- Output is always PNG with a solid #ffffff background.
+- Model downloads on first use and is cached by the browser.
+
+MIT · Built for real product photos.
