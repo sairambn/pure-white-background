@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Check, Download, ImagePlus, LoaderCircle, LockKeyhole, RotateCcw, Upload, X } from "lucide-react";
+import { Check, Download, ImagePlus, LoaderCircle, LockKeyhole, RotateCcw, Upload } from "lucide-react";
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 
 import mugOriginal from "@/assets/mug-original.jpg";
@@ -69,7 +69,7 @@ function Index() {
     setStatus("processing");
 
     try {
-      const { default: removeBackground } = await import("@imgly/background-removal");
+      const { removeBackground } = await import("@imgly/background-removal");
       const foreground = await removeBackground(file, {
         model: "isnet_quint8",
         device: "cpu",
