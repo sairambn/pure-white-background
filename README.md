@@ -1,24 +1,38 @@
 # Paperwhite
 
-Free private tool that removes photo backgrounds and puts the subject on pure white (#ffffff).
+**Live → [paperwhite-bg.vercel.app](https://paperwhite-bg.vercel.app)**
+
+Free private tool that removes photo backgrounds and places the subject on pure white (`#ffffff`).
 
 Everything runs in the browser. Your image never leaves the device. No account, no watermark, no usage limits.
 
-**Live** → [paperwhite-bg.vercel.app](https://paperwhite-bg.vercel.app)
+## Features
 
-## What it does
+- Drag and drop, file browse, or paste from clipboard
+- Client-side background removal (IMG.LY model)
+- Pure white studio output every time
+- PNG download ready for product listings and stores
+- Large images auto-scaled for mobile stability
+- Keyboard accessible drop zone
+- Works on desktop and mobile
 
-1. Drop a PNG, JPG or WebP (max 10 MB).
-2. The IMG.LY model cuts out the subject on your device.
-3. The cutout is placed on a pure white canvas.
-4. Download a clean PNG ready for product listings, stores or print.
+## How it works
+
+1. Drop a PNG, JPG, or WebP (max 10 MB)
+2. The model cuts out the subject on your device
+3. The cutout is placed on a pure white canvas
+4. Download a clean PNG
 
 ## Stack
 
-- TanStack Start + React 19 + TypeScript
-- Vite + Tailwind CSS v4
-- `@imgly/background-removal` (client-side, isnet_quint8 model)
-- Local processing only — no server upload
+| Layer | Tech |
+| --- | --- |
+| Framework | TanStack Start + React 19 + TypeScript |
+| Build | Vite + Tailwind CSS v4 |
+| Removal | `@imgly/background-removal` (isnet_quint8) |
+| Deploy | Vercel |
+
+Processing is fully local. Nothing is uploaded to a server.
 
 ## Quick start
 
@@ -29,40 +43,43 @@ npm install
 npm run dev
 ```
 
-Open the URL shown in the terminal (usually http://localhost:5173).
+Open the URL shown in the terminal (usually `http://localhost:5173`).
 
 ```sh
 npm run build
 npm run preview
 ```
 
+Requires Node 18+.
+
 ## Project structure
 
 ```
 src/
   routes/
-    index.tsx      # Main tool UI + processing logic
+    index.tsx      # Tool UI + processing logic
     __root.tsx     # Shell, fonts, meta, error boundaries
   components/ui/   # Shared UI primitives
-  assets/          # Example before/after images
+  assets/          # Before / after example images
   lib/             # Utilities and error helpers
 public/
   favicon.svg
   robots.txt
 ```
 
-## Roadmap status
+## Status
 
-- [x] Clean production build
-- [x] Full upload → remove → white canvas → download flow
-- [x] Desktop and mobile layouts checked
-- [x] Issues fixed and re-verified
-- [x] Deployed on Vercel with free domain
+- [x] Production build
+- [x] Upload → remove → white canvas → download
+- [x] Desktop and mobile layouts
+- [x] Paste support and keyboard access
+- [x] Large image safety
+- [x] Deployed on Vercel
 
 ## Notes
 
-- Processing is 100 % client-side. Photos stay on the user’s device.
-- Output is always PNG with a solid #ffffff background.
-- Model downloads on first use and is cached by the browser.
+- Output is always PNG with a solid `#ffffff` background
+- Model downloads on first use and is cached by the browser
+- HEIC is not supported — export as JPG or PNG first
 
 MIT · Built for real product photos.
