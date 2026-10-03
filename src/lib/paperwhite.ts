@@ -64,31 +64,31 @@ export function isAllowedImage(file: File): { ok: true } | { ok: false; reason: 
   return { ok: true };
 }
 
-/** Clean bottom-right watermark — scales with image size. */
+/** Calligraphy italic watermark in the bottom-right corner. */
 function drawWatermark(ctx: CanvasRenderingContext2D, width: number, height: number) {
   const text = "thiru";
   const shortSide = Math.min(width, height);
 
-  // Size that stays elegant on both phone shots and large product photos
-  const fontSize = Math.round(Math.min(28, Math.max(11, shortSide * 0.028)));
-  const marginX = Math.round(Math.max(10, shortSide * 0.028));
-  const marginY = Math.round(Math.max(10, shortSide * 0.024));
+  // Script fonts read a bit smaller — size up slightly for elegance
+  const fontSize = Math.round(Math.min(34, Math.max(14, shortSide * 0.036)));
+  const marginX = Math.round(Math.max(12, shortSide * 0.03));
+  const marginY = Math.round(Math.max(10, shortSide * 0.026));
 
   ctx.save();
-  ctx.font = `500 ${fontSize}px Inter, system-ui, -apple-system, "Segoe UI", sans-serif`;
-  ctx.letterSpacing = "0.06em";
+  // Proper calligraphy italic stack (OS script fonts → elegant italic serif fallback)
+  ctx.font = `italic 500 ${fontSize}px "Segoe Script", "Apple Chancery", "Brush Script MT", "Palatino Linotype", Georgia, cursive`;
   ctx.textAlign = "right";
   ctx.textBaseline = "bottom";
 
   const x = width - marginX;
   const y = height - marginY;
 
-  // Soft depth so it sits on pure white without looking muddy
-  ctx.fillStyle = "rgba(0, 0, 0, 0.12)";
+  // Soft shadow for depth on pure white
+  ctx.fillStyle = "rgba(0, 0, 0, 0.14)";
   ctx.fillText(text, x + 1, y + 1);
 
-  // Main mark — quiet, sharp, intentional
-  ctx.fillStyle = "rgba(28, 28, 28, 0.42)";
+  // Main calligraphy mark
+  ctx.fillStyle = "rgba(32, 28, 26, 0.48)";
   ctx.fillText(text, x, y);
 
   ctx.restore();
@@ -134,7 +134,6 @@ export async function removeToWhite(
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Your browser could not create the image.");
 
-    // Crisp edges on retina canvases
     context.imageSmoothingEnabled = true;
     context.imageSmoothingQuality = "high";
 
