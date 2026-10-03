@@ -4,7 +4,7 @@ Free private tool that removes photo backgrounds and puts the subject on pure wh
 
 Everything runs in the browser. Your image never leaves the device. No account, no watermark, no usage limits.
 
-**Live demo** — open the project and run it locally, or continue in the [Lovable editor](https://lovable.dev/projects/49c6a45a-0195-441a-8ea8-7131ad8baa72).
+**Live** → [paperwhite-bg.vercel.app](https://paperwhite-bg.vercel.app)
 
 ## What it does
 
@@ -57,6 +57,7 @@ public/
 - [x] Full upload → remove → white canvas → download flow
 - [x] Desktop and mobile layouts checked
 - [x] Issues fixed and re-verified
+- [x] Deployed on Vercel with free domain
 
 ## Notes
 
