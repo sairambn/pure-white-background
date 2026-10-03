@@ -1,41 +1,75 @@
 # Paperwhite
 
-**Live → [paperwhite-bg.vercel.app](https://paperwhite-bg.vercel.app)**
+**[Open the tool →](https://paperwhite-bg.vercel.app)**
 
-Free private tool that removes photo backgrounds and places the subject on pure white (`#ffffff`).
+Remove photo backgrounds in your browser and place the subject on pure white (`#ffffff`).
 
-Everything runs in the browser. Your image never leaves the device. No account, no watermark, no usage limits.
+No account. No server upload. No usage limits. Built for product photos, store listings, and clean studio-style shots.
+
+---
+
+## Why Paperwhite
+
+Most background tools send your images to a server. Paperwhite never does.
+
+- Processing stays on your device
+- Output is always solid white
+- Batch up to 15 images in one go
+- Free to use, no signup
+
+Perfect when you need consistent white-background product images without handing photos to a third-party API.
+
+---
 
 ## Features
 
-- Upload up to **15 images** at once
-- Drag and drop, file browse, or paste from clipboard
-- Client-side background removal (IMG.LY model)
-- Pure white studio output every time
-- Per-image PNG download
-- Large images auto-scaled for mobile stability
-- Keyboard accessible drop zone
-- Works on desktop and mobile
+| Feature | Detail |
+| --- | --- |
+| Batch upload | Up to 15 images at once |
+| Input formats | PNG, JPG, WebP (max 10 MB each) |
+| Output | PNG on pure `#ffffff` |
+| Privacy | 100% on-device processing |
+| Paste support | Ctrl/Cmd + V from clipboard |
+| Mobile | Responsive layout, large images auto-scaled |
+| Access | Keyboard-friendly drop zone |
+| Branding | Soft `thiru` mark in the bottom-right corner |
+
+---
 
 ## How it works
 
-1. Drop up to 15 PNG, JPG, or WebP files (10 MB each)
-2. Each image is processed one by one on your device
-3. The cutout is placed on a pure white canvas
-4. Download each ready PNG
+1. Drop or select up to 15 product photos
+2. The model removes the background on your device
+3. Each cutout is placed on a pure white canvas
+4. Download each ready PNG individually
 
-## Stack
+Images are processed one at a time so the browser stays stable, even on phones.
 
-| Layer | Tech |
+---
+
+## Live demo
+
+**https://paperwhite-bg.vercel.app**
+
+Try a product photo (mug, watch, shoes, packaging). The original stays on the left; the white version appears on the right when ready.
+
+---
+
+## Tech stack
+
+| Layer | Choice |
 | --- | --- |
 | Framework | TanStack Start + React 19 + TypeScript |
-| Build | Vite + Tailwind CSS v4 |
-| Removal | `@imgly/background-removal` (isnet_quint8) |
-| Deploy | Vercel |
+| Styling | Tailwind CSS v4 |
+| Build | Vite |
+| Removal model | `@imgly/background-removal` (`isnet_quint8`) |
+| Hosting | Vercel |
 
-Processing is fully local. Nothing is uploaded to a server.
+The background-removal model downloads on first use and is cached by the browser afterward.
 
-## Quick start
+---
+
+## Local development
 
 ```sh
 git clone https://github.com/sairambn/pure-white-background.git
@@ -51,39 +85,39 @@ npm run build
 npm run preview
 ```
 
-Requires Node 18+.
+Requires **Node 18+**.
+
+---
 
 ## Project structure
 
 ```
 src/
   routes/
-    index.tsx      # Tool UI + batch queue
-    __root.tsx     # Shell, fonts, meta, error boundaries
+    index.tsx       # UI, batch queue, drop zone
+    __root.tsx      # Shell, fonts, meta tags
   lib/
-    paperwhite.ts  # Image prep + background removal
-  components/ui/   # Shared UI primitives
-  assets/          # Before / after example images
+    paperwhite.ts   # Image prep, removal, watermark, export
+  components/ui/    # Shared UI primitives
+  assets/           # Example before / after images
 public/
   favicon.svg
   robots.txt
 ```
 
-## Status
-
-- [x] Production build
-- [x] Upload → remove → white canvas → download
-- [x] Batch up to 15 images
-- [x] Desktop and mobile layouts
-- [x] Paste support and keyboard access
-- [x] Large image safety
-- [x] Deployed on Vercel
+---
 
 ## Notes
 
-- Output is always PNG with a solid `#ffffff` background
-- Model downloads on first use and is cached by the browser
-- Images process one at a time to keep the browser stable
-- HEIC is not supported — export as JPG or PNG first
+- Output is always PNG with a solid white background
+- Large images are scaled down (max edge 2048px) for mobile stability
+- HEIC / HEIF is not supported — export as JPG or PNG first
+- A small `thiru` watermark is drawn in the bottom-right of every export
 
-MIT · Built for real product photos.
+---
+
+## License
+
+MIT
+
+Built for real product photos.
