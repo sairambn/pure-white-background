@@ -2,74 +2,84 @@
 
 **[Open the tool →](https://paperwhite-bg.vercel.app)**
 
-Remove photo backgrounds in your browser and place the subject on pure white (`#ffffff`).
+Free forever. Easy to use. Your photos never leave your device.
 
-No account. No server upload. No usage limits. Built for product photos, store listings, and clean studio-style shots.
-
----
-
-## Why Paperwhite
-
-Most background tools send your images to a server. Paperwhite never does.
-
-- Processing stays on your device
-- Output is always solid white
-- Batch up to 15 images in one go
-- Free to use, no signup
-
-Perfect when you need consistent white-background product images without handing photos to a third-party API.
+Drop a product photo, get a pure white background (`#ffffff`) in seconds. No account, no payment, no limits — now or later.
 
 ---
 
-## Features
+## Lifelong free
 
-| Feature | Detail |
+Paperwhite is free to use for life.
+
+- No signup
+- No credits or monthly caps
+- No “pro” paywall
+- No server fees tied to your photos
+
+Everything runs in the browser on your own device. That keeps it private and keeps it free.
+
+---
+
+## Easy to use
+
+1. Open the site
+2. Drop up to 15 photos (or paste / browse)
+3. Wait for each white version
+4. Download the PNGs
+
+That’s it. Works on desktop and mobile. No tutorials needed.
+
+---
+
+## What you get
+
+| | |
 | --- | --- |
-| Batch upload | Up to 15 images at once |
-| Input formats | PNG, JPG, WebP (max 10 MB each) |
-| Output | PNG on pure `#ffffff` |
-| Privacy | 100% on-device processing |
-| Paste support | Ctrl/Cmd + V from clipboard |
-| Mobile | Responsive layout, large images auto-scaled |
-| Access | Keyboard-friendly drop zone |
-| Branding | Soft `thiru` mark in the bottom-right corner |
+| **Output** | PNG on solid pure white |
+| **Batch** | Up to 15 images at once |
+| **Formats** | PNG, JPG, WebP (10 MB each) |
+| **Privacy** | On-device only — nothing uploaded |
+| **Paste** | Ctrl/Cmd + V from clipboard |
+| **Mark** | Soft `thiru` in the bottom-right |
 
 ---
 
-## How it works
-
-1. Drop or select up to 15 product photos
-2. The model removes the background on your device
-3. Each cutout is placed on a pure white canvas
-4. Download each ready PNG individually
-
-Images are processed one at a time so the browser stays stable, even on phones.
-
----
-
-## Live demo
+## Live
 
 **https://paperwhite-bg.vercel.app**
 
-Try a product photo (mug, watch, shoes, packaging). The original stays on the left; the white version appears on the right when ready.
+Try a mug, watch, shoe, or packaging shot. Left = original. Right = pure white when ready.
 
 ---
 
-## Tech stack
+## Why not a cloud tool?
+
+Most background apps send your images to a server. Paperwhite does not.
+
+- Your photos stay on your device
+- No account that can be locked or billed later
+- Same white result every time (`#ffffff`)
+
+Built for store listings, catalogs, and anyone who just wants a clean white backdrop without the friction.
+
+---
+
+## Tech
 
 | Layer | Choice |
 | --- | --- |
-| Framework | TanStack Start + React 19 + TypeScript |
-| Styling | Tailwind CSS v4 |
+| App | TanStack Start + React 19 + TypeScript |
+| Style | Tailwind CSS v4 |
 | Build | Vite |
-| Removal model | `@imgly/background-removal` (`isnet_quint8`) |
-| Hosting | Vercel |
+| Model | `@imgly/background-removal` (`isnet_quint8`) |
+| Host | Vercel |
 
-The background-removal model downloads on first use and is cached by the browser afterward.
+The model downloads once, then the browser caches it.
 
 ---
 
-## Local development
+## Run locally
 
 ```sh
 git clone https://github.com/sairambn/pure-white-background.git
@@ -78,28 +88,27 @@ npm install
 npm run dev
 ```
 
-Open the URL shown in the terminal (usually `http://localhost:5173`).
+Open the URL in the terminal (usually `http://localhost:5173`).
 
 ```sh
-npm run build
-npm run preview
+npm run build && npm run preview
 ```
 
-Requires **Node 18+**.
+Node 18+ required.
 
 ---
 
-## Project structure
+## Structure
 
 ```
 src/
   routes/
-    index.tsx       # UI, batch queue, drop zone
-    __root.tsx      # Shell, fonts, meta tags
+    index.tsx       # UI + batch queue
+    __root.tsx      # Shell, meta, fonts
   lib/
-    paperwhite.ts   # Image prep, removal, watermark, export
-  components/ui/    # Shared UI primitives
-  assets/           # Example before / after images
+    paperwhite.ts   # Prep, removal, watermark, export
+  components/ui/
+  assets/
 public/
   favicon.svg
   robots.txt
@@ -109,15 +118,15 @@ public/
 
 ## Notes
 
-- Output is always PNG with a solid white background
-- Large images are scaled down (max edge 2048px) for mobile stability
-- HEIC / HEIF is not supported — export as JPG or PNG first
-- A small `thiru` watermark is drawn in the bottom-right of every export
+- Output is always PNG on `#ffffff`
+- Large images are scaled (max edge 2048px) for mobile stability
+- HEIC is not supported — export as JPG or PNG first
+- A small `thiru` watermark sits in the bottom-right of each export
 
 ---
 
 ## License
 
-MIT
+MIT — free to use, free to fork, free for life.
 
 Built for real product photos.
