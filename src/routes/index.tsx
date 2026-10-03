@@ -73,7 +73,7 @@ function Index() {
       const foreground = await removeBackground(file, {
         model: "isnet_quint8",
         device: "cpu",
-        output: { format: "image/png", quality: 1, type: "foreground" },
+        output: { format: "image/png", quality: 1 },
         progress: (_key: string, current: number, total: number) => {
           if (total > 0) setProgress(Math.min(72, Math.round((current / total) * 70)));
         },
