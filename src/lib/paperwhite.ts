@@ -64,22 +64,33 @@ export function isAllowedImage(file: File): { ok: true } | { ok: false; reason: 
   return { ok: true };
 }
 
+/** Clean bottom-right watermark — scales with image size. */
 function drawWatermark(ctx: CanvasRenderingContext2D, width: number, height: number) {
   const text = "thiru";
-  const fontSize = Math.max(12, Math.round(Math.min(width, height) * 0.035));
-  const padding = Math.max(8, Math.round(fontSize * 0.6));
+  const shortSide = Math.min(width, height);
+
+  // Size that stays elegant on both phone shots and large product photos
+  const fontSize = Math.round(Math.min(28, Math.max(11, shortSide * 0.028)));
+  const marginX = Math.round(Math.max(10, shortSide * 0.028));
+  const marginY = Math.round(Math.max(10, shortSide * 0.024));
 
   ctx.save();
-  ctx.font = `500 ${fontSize}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+  ctx.font = `500 ${fontSize}px Inter, system-ui, -apple-system, "Segoe UI", sans-serif`;
+  ctx.letterSpacing = "0.06em";
   ctx.textAlign = "right";
   ctx.textBaseline = "bottom";
 
-  // Soft shadow so it stays readable on white
-  ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
-  ctx.fillText(text, width - padding + 0.5, height - padding + 0.5);
+  const x = width - marginX;
+  const y = height - marginY;
 
-  ctx.fillStyle = "rgba(40, 40, 40, 0.55)";
-  ctx.fillText(text, width - padding, height - padding);
+  // Soft depth so it sits on pure white without looking muddy
+  ctx.fillStyle = "rgba(0, 0, 0, 0.12)";
+  ctx.fillText(text, x + 1, y + 1);
+
+  // Main mark — quiet, sharp, intentional
+  ctx.fillStyle = "rgba(28, 28, 28, 0.42)";
+  ctx.fillText(text, x, y);
+
   ctx.restore();
 }
 
@@ -122,6 +133,11 @@ export async function removeToWhite(
     canvas.height = image.naturalHeight;
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Your browser could not create the image.");
+
+    // Crisp edges on retina canvases
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+
     context.fillStyle = "#ffffff";
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(image, 0, 0);
