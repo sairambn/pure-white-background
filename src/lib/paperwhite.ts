@@ -66,27 +66,43 @@ export function isAllowedImage(file: File): { ok: true } | { ok: false; reason: 
   return { ok: true };
 }
 
-/** Professional © tnmeds watermark — bottom-right, scales with image. */
+/**
+ * Premium © tnmeds watermark — bottom-right.
+ * Small, light, tracked letter-spacing, soft lift on pure white.
+ */
 function drawWatermark(ctx: CanvasRenderingContext2D, width: number, height: number) {
   const text = "© tnmeds";
   const shortSide = Math.min(width, height);
 
-  const fontSize = Math.round(Math.min(26, Math.max(11, shortSide * 0.028)));
-  const marginX = Math.round(Math.max(14, shortSide * 0.032));
-  const marginY = Math.round(Math.max(12, shortSide * 0.028));
+  // Keep it small so the product stays the hero
+  const fontSize = Math.round(Math.min(18, Math.max(10, shortSide * 0.018)));
+  const marginX = Math.round(Math.max(16, shortSide * 0.028));
+  const marginY = Math.round(Math.max(14, shortSide * 0.024));
 
   ctx.save();
-  ctx.font = `500 ${fontSize}px Inter, system-ui, -apple-system, "Segoe UI", sans-serif`;
+  ctx.font = `400 ${fontSize}px Inter, system-ui, -apple-system, "Segoe UI", sans-serif`;
   ctx.textAlign = "right";
   ctx.textBaseline = "bottom";
+  // Subtle tracking (supported in modern browsers)
+  try {
+    (ctx as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = `${Math.max(0.5, fontSize * 0.06)}px`;
+  } catch {
+    // ignore if unsupported
+  }
 
   const x = width - marginX;
   const y = height - marginY;
 
-  ctx.fillStyle = "rgba(0, 0, 0, 0.12)";
-  ctx.fillText(text, x + 1, y + 1);
+  // Hairline white lift so the mark never looks muddy on #ffffff
+  ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+  ctx.fillText(text, x, y - 0.5);
 
-  ctx.fillStyle = "rgba(30, 30, 30, 0.45)";
+  // Soft depth
+  ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
+  ctx.fillText(text, x + 0.5, y + 0.5);
+
+  // Main mark — quiet charcoal, premium opacity
+  ctx.fillStyle = "rgba(40, 40, 40, 0.32)";
   ctx.fillText(text, x, y);
 
   ctx.restore();
