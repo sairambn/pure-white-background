@@ -355,16 +355,18 @@ function Index() {
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="text-sm text-muted-foreground">
                       {processingCount > 0
-                        ? `Working… ${doneCount}/${items.length}`
-                        : doneCount === items.length
-                          ? `${doneCount} ready`
-                          : `${doneCount} of ${items.length} ready`}
+                        ? `Working… ${doneCount} of ${items.length} ready`
+                        : `${doneCount} ready`}
                     </p>
                     <div className="flex flex-wrap gap-2">
                       {readyItems.length > 0 && (
                         <Button variant="accent" type="button" onClick={() => void handleDownloadZip()} disabled={zipping}>
                           <Download size={15} />
-                          {zipping ? "Zipping…" : readyItems.length === 1 ? "Download ZIP" : `Download ZIP (${readyItems.length})`}
+                          {zipping
+                            ? "Zipping…"
+                            : readyItems.length === 1
+                              ? "Download"
+                              : `Download all (${readyItems.length})`}
                         </Button>
                       )}
                       {items.length < MAX_FILES && (
