@@ -74,27 +74,30 @@ export function isAllowedImage(file: File): { ok: true } | { ok: false; reason: 
   return { ok: true };
 }
 
-/** Calligraphy italic watermark in the bottom-right corner. */
+/** Professional © tnmeds watermark — bottom-right, scales with image. */
 function drawWatermark(ctx: CanvasRenderingContext2D, width: number, height: number) {
-  const text = "thiru";
+  const text = "© tnmeds";
   const shortSide = Math.min(width, height);
 
-  const fontSize = Math.round(Math.min(34, Math.max(14, shortSide * 0.036)));
-  const marginX = Math.round(Math.max(12, shortSide * 0.03));
-  const marginY = Math.round(Math.max(10, shortSide * 0.026));
+  const fontSize = Math.round(Math.min(26, Math.max(11, shortSide * 0.028)));
+  const marginX = Math.round(Math.max(14, shortSide * 0.032));
+  const marginY = Math.round(Math.max(12, shortSide * 0.028));
 
   ctx.save();
-  ctx.font = `italic 500 ${fontSize}px "Segoe Script", "Apple Chancery", "Brush Script MT", "Palatino Linotype", Georgia, cursive`;
+  ctx.font = `500 ${fontSize}px Inter, system-ui, -apple-system, "Segoe UI", sans-serif`;
   ctx.textAlign = "right";
   ctx.textBaseline = "bottom";
 
+  // letter-spacing via manual draw is unreliable on all browsers; keep clean spacing in the string
   const x = width - marginX;
   const y = height - marginY;
 
-  ctx.fillStyle = "rgba(0, 0, 0, 0.14)";
+  // Soft shadow so it sits cleanly on pure white
+  ctx.fillStyle = "rgba(0, 0, 0, 0.12)";
   ctx.fillText(text, x + 1, y + 1);
 
-  ctx.fillStyle = "rgba(32, 28, 26, 0.48)";
+  // Main mark — quiet, sharp, professional
+  ctx.fillStyle = "rgba(30, 30, 30, 0.45)";
   ctx.fillText(text, x, y);
 
   ctx.restore();
