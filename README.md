@@ -27,7 +27,6 @@ That’s it. Desktop and mobile.
 | **Batch** | Up to 15 images at once |
 | **Formats** | PNG, JPG, WebP (10 MB each) |
 | **Output** | PNG on solid pure white |
-| **Edge feather** | Soften cutout edges (0–5 px) |
 | **Privacy** | On-device only — nothing uploaded |
 | **Paste** | Ctrl/Cmd + V |
 | **Mark** | `© tnmeds` bottom-right |
