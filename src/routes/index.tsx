@@ -7,12 +7,8 @@ import mugWhite from "@/assets/mug-white.jpg";
 import { Button } from "@/components/ui/button";
 import {
   MAX_FILES,
-  FEATHER_DEFAULT,
-  FEATHER_MIN,
-  FEATHER_MAX,
   isAllowedImage,
   removeToWhite,
-  compositeOnWhite,
   downloadAllAsZip,
   type WorkItem,
 } from "@/lib/paperwhite";
@@ -59,47 +55,11 @@ function Index() {
   const [items, setItems] = useState<WorkItem[]>([]);
   const [dragging, setDragging] = useState(false);
   const [batchError, setBatchError] = useState("");
-  const [featherPx, setFeatherPx] = useState(FEATHER_DEFAULT);
-  const featherRef = useRef(FEATHER_DEFAULT);
   const [zipping, setZipping] = useState(false);
 
   useEffect(() => {
     itemsRef.current = items;
   }, [items]);
-
-  useEffect(() => {
-    featherRef.current = featherPx;
-  }, [featherPx]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      const done = itemsRef.current.filter((it) => it.status === "done" && it.cutoutUrl);
-      for (const item of done) {
-        if (cancelled) return;
-        try {
-          const resultUrl = await compositeOnWhite(item.cutoutUrl!, featherPx);
-          if (cancelled) {
-            URL.revokeObjectURL(resultUrl);
-            return;
-          }
-          setItems((prev) =>
-            prev.map((it) => {
-              if (it.id !== item.id) return it;
-              if (it.resultUrl) URL.revokeObjectURL(it.resultUrl);
-              return { ...it, resultUrl };
-            }),
-          );
-        } catch {
-          // keep previous result
-        }
-      }
-    };
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [featherPx]);
 
   useEffect(
     () => () => {
@@ -136,7 +96,6 @@ function Index() {
               updateItem(next.id, { progress, message });
             },
             () => runId !== runIdRef.current,
-            { featherPx: featherRef.current },
           );
           if (runId !== runIdRef.current) {
             URL.revokeObjectURL(cutoutUrl);
@@ -350,29 +309,6 @@ function Index() {
             </div>
 
             <div className="p-4 sm:p-6">
-              <div className="mb-4 flex flex-wrap items-center gap-3 rounded-[12px] bg-background/60 px-3 py-2.5 ring-1 ring-inset ring-border">
-                <label htmlFor="edge-feather" className="shrink-0 text-sm font-medium text-foreground/80">
-                  Edge feather
-                </label>
-                <input
-                  id="edge-feather"
-                  type="range"
-                  min={FEATHER_MIN}
-                  max={FEATHER_MAX}
-                  step={0.5}
-                  value={featherPx}
-                  onChange={(e) => setFeatherPx(Number(e.target.value))}
-                  className="h-2 min-w-[120px] flex-1 cursor-pointer accent-primary"
-                  aria-valuemin={FEATHER_MIN}
-                  aria-valuemax={FEATHER_MAX}
-                  aria-valuenow={featherPx}
-                  aria-label="Edge feather in pixels"
-                />
-                <span className="w-12 text-right font-mono text-xs text-muted-foreground tabular-nums">
-                  {featherPx.toFixed(1)} px
-                </span>
-              </div>
-
               <input
                 ref={inputRef}
                 type="file"
