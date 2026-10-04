@@ -30,6 +30,7 @@ That’s it. Desktop and mobile.
 | **Edge feather** | Soften cutout edges (0–5 px) |
 | **Privacy** | On-device only — nothing uploaded |
 | **Paste** | Ctrl/Cmd + V |
+| **Mark** | `© tnmeds` bottom-right |
 
 No account. No credits. No paywall. Free for life.
 
@@ -87,7 +88,7 @@ Node 18+ required.
 - Output is always PNG on `#ffffff`
 - Large images are scaled (max edge 2048 px) for mobile stability
 - HEIC is not supported — export as JPG or PNG first
-- A small calligraphy `thiru` mark is on each export
+- Each export has a quiet `© tnmeds` mark in the bottom-right corner
 
 ---
 
