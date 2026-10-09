@@ -1,18 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Check, Download, ImagePlus, LoaderCircle, LockKeyhole, RotateCcw, Upload, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
 
 import mugOriginal from "@/assets/mug-original.jpg";
 import mugWhite from "@/assets/mug-white.jpg";
 import { Button } from "@/components/ui/button";
-import {
-  MAX_FILES,
-  isAllowedImage,
-  removeToWhite,
-  downloadAllAsZip,
-  preloadModel,
-  type WorkItem,
-} from "@/lib/paperwhite";
+import { useBatchProcessor } from "@/hooks/useBatchProcessor";
+import { MAX_FILES, type WorkItem } from "@/lib/batch";
 
 const LIVE_URL = "https://paperwhite-bg.vercel.app";
 
@@ -49,172 +43,23 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   const inputRef = useRef<HTMLInputElement>(null);
-  const runIdRef = useRef(0);
-  const processingRef = useRef(false);
-  const activeRef = useRef(0);
-  const itemsRef = useRef<WorkItem[]>([]);
-  const CONCURRENCY = 3;
-
-  const [items, setItems] = useState<WorkItem[]>([]);
   const [dragging, setDragging] = useState(false);
-  const [batchError, setBatchError] = useState("");
-  const [zipping, setZipping] = useState(false);
 
-  useEffect(() => {
-    itemsRef.current = items;
-  }, [items]);
-
-  useEffect(() => {
-    void preloadModel();
-  }, []);
-
-  useEffect(
-    () => () => {
-      for (const item of itemsRef.current) {
-        URL.revokeObjectURL(item.originalUrl);
-        if (item.cutoutUrl) URL.revokeObjectURL(item.cutoutUrl);
-        if (item.resultUrl) URL.revokeObjectURL(item.resultUrl);
-      }
-    },
-    [],
-  );
-
-  const updateItem = useCallback((id: string, patch: Partial<WorkItem>) => {
-    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
-  }, []);
-
-  const processOne = useCallback(
-    async (item: WorkItem, runId: number) => {
-      updateItem(item.id, { status: "processing", progress: 2, message: "Starting…" });
-      try {
-        const { cutoutUrl, resultUrl } = await removeToWhite(
-          item.file,
-          (progress, message) => {
-            if (runId !== runIdRef.current) return;
-            updateItem(item.id, { progress, message });
-          },
-          () => runId !== runIdRef.current,
-        );
-        if (runId !== runIdRef.current) {
-          URL.revokeObjectURL(cutoutUrl);
-          URL.revokeObjectURL(resultUrl);
-          return;
-        }
-        updateItem(item.id, {
-          status: "done",
-          progress: 100,
-          message: "Ready",
-          cutoutUrl,
-          resultUrl,
-        });
-      } catch (error) {
-        if (runId !== runIdRef.current) return;
-        const raw = error instanceof Error ? error.message : "Background removal failed.";
-        if (raw === "__cancelled__") return;
-        updateItem(item.id, {
-          status: "error",
-          progress: 0,
-          message: /network|fetch|failed to fetch/i.test(raw)
-            ? "Could not load the model. Check your connection."
-            : raw || "Background removal failed.",
-        });
-      }
-    },
-    [updateItem],
-  );
-
-  const processQueue = useCallback(async () => {
-    if (processingRef.current) return;
-    processingRef.current = true;
-    const runId = runIdRef.current;
-
-    try {
-      while (runId === runIdRef.current) {
-        const queued = itemsRef.current.filter((it) => it.status === "queued");
-        if (queued.length === 0 && activeRef.current === 0) break;
-        if (queued.length === 0) {
-          await new Promise((r) => setTimeout(r, 40));
-          continue;
-        }
-
-        const slots = CONCURRENCY - activeRef.current;
-        if (slots <= 0) {
-          await new Promise((r) => setTimeout(r, 40));
-          continue;
-        }
-
-        const batch = queued.slice(0, slots);
-        await Promise.all(
-          batch.map(async (item) => {
-            activeRef.current += 1;
-            try {
-              await processOne(item, runId);
-            } finally {
-              activeRef.current = Math.max(0, activeRef.current - 1);
-            }
-          }),
-        );
-      }
-    } finally {
-      processingRef.current = false;
-      if (runId === runIdRef.current && itemsRef.current.some((it) => it.status === "queued")) {
-        void processQueue();
-      }
-    }
-  }, [processOne]);
-
-  useEffect(() => {
-    if (items.some((it) => it.status === "queued") && !processingRef.current) {
-      void processQueue();
-    }
-  }, [items, processQueue]);
-
-  const addFiles = useCallback((fileList: FileList | File[]) => {
-    const incoming = Array.from(fileList);
-    if (incoming.length === 0) return;
-
-    setBatchError("");
-    const existing = itemsRef.current.length;
-    const room = MAX_FILES - existing;
-    if (room <= 0) {
-      setBatchError(`You can process up to ${MAX_FILES} images at a time. Start over to add more.`);
-      return;
-    }
-
-    const accepted: WorkItem[] = [];
-    const rejected: string[] = [];
-
-    for (const file of incoming) {
-      if (accepted.length >= room) {
-        rejected.push(`${file.name}: limit is ${MAX_FILES} images`);
-        continue;
-      }
-      const check = isAllowedImage(file);
-      if (!check.ok) {
-        rejected.push(`${file.name}: ${check.reason}`);
-        continue;
-      }
-      const originalUrl = URL.createObjectURL(file);
-      accepted.push({
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-        file,
-        fileName: file.name || "photo",
-        originalUrl,
-        cutoutUrl: null,
-        resultUrl: null,
-        status: "queued",
-        progress: 0,
-        message: "Waiting…",
-      });
-    }
-
-    if (rejected.length > 0) {
-      setBatchError(rejected.slice(0, 3).join(" · ") + (rejected.length > 3 ? ` · +${rejected.length - 3} more` : ""));
-    }
-    if (accepted.length === 0) return;
-
-    setItems((prev) => [...prev, ...accepted]);
-  }, []);
+  const {
+    items,
+    batchError,
+    zipping,
+    readyItems,
+    doneCount,
+    processingCount,
+    isIdle,
+    canAddMore,
+    slotsLeft,
+    addFiles,
+    removeItem,
+    reset,
+    downloadZip,
+  } = useBatchProcessor();
 
   const handleInput = (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) addFiles(event.target.files);
@@ -225,31 +70,6 @@ function Index() {
     event.preventDefault();
     setDragging(false);
     if (event.dataTransfer.files?.length) addFiles(event.dataTransfer.files);
-  };
-
-  const reset = () => {
-    runIdRef.current += 1;
-    processingRef.current = false;
-    activeRef.current = 0;
-    for (const item of itemsRef.current) {
-      URL.revokeObjectURL(item.originalUrl);
-      if (item.cutoutUrl) URL.revokeObjectURL(item.cutoutUrl);
-      if (item.resultUrl) URL.revokeObjectURL(item.resultUrl);
-    }
-    setItems([]);
-    setBatchError("");
-  };
-
-  const removeItem = (id: string) => {
-    setItems((prev) => {
-      const target = prev.find((it) => it.id === id);
-      if (target) {
-        URL.revokeObjectURL(target.originalUrl);
-        if (target.cutoutUrl) URL.revokeObjectURL(target.cutoutUrl);
-        if (target.resultUrl) URL.revokeObjectURL(target.resultUrl);
-      }
-      return prev.filter((it) => it.id !== id);
-    });
   };
 
   useEffect(() => {
@@ -276,25 +96,6 @@ function Index() {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       inputRef.current?.click();
-    }
-  };
-
-  const doneCount = items.filter((it) => it.status === "done").length;
-  const processingCount = items.filter((it) => it.status === "processing" || it.status === "queued").length;
-  const isIdle = items.length === 0;
-  const readyItems = items.filter((it) => it.status === "done" && it.resultUrl);
-
-  const handleDownloadZip = async () => {
-    if (readyItems.length === 0 || zipping) return;
-    setZipping(true);
-    try {
-      await downloadAllAsZip(
-        readyItems.map((it) => ({ fileName: it.fileName, resultUrl: it.resultUrl! })),
-      );
-    } catch {
-      setBatchError("Could not build the ZIP. Try again.");
-    } finally {
-      setZipping(false);
     }
   };
 
@@ -397,7 +198,7 @@ function Index() {
                     </p>
                     <div className="flex flex-wrap gap-2">
                       {readyItems.length > 0 && (
-                        <Button variant="accent" type="button" onClick={() => void handleDownloadZip()} disabled={zipping}>
+                        <Button variant="accent" type="button" onClick={() => void downloadZip()} disabled={zipping}>
                           <Download size={15} />
                           {zipping
                             ? "Zipping…"
@@ -406,7 +207,7 @@ function Index() {
                               : `Download all (${readyItems.length})`}
                         </Button>
                       )}
-                      {items.length < MAX_FILES && (
+                      {canAddMore && (
                         <Button variant="outline" type="button" onClick={() => inputRef.current?.click()}>
                           <ImagePlus size={15} />
                           Add more
@@ -429,7 +230,7 @@ function Index() {
                     ))}
                   </div>
 
-                  {items.length < MAX_FILES && (
+                  {canAddMore && (
                     <div
                       onDragEnter={(event) => { event.preventDefault(); setDragging(true); }}
                       onDragOver={(event) => event.preventDefault()}
@@ -439,7 +240,7 @@ function Index() {
                         dragging ? "border-primary bg-accent/40 text-foreground" : "border-border"
                       }`}
                     >
-                      Drop more images here ({MAX_FILES - items.length} slots left)
+                      Drop more images here ({slotsLeft} slots left)
                     </div>
                   )}
                 </div>
