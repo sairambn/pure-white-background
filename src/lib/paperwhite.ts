@@ -201,10 +201,11 @@ export async function removeToWhite(
   let foreground: Blob | null = null;
   let lastError: unknown;
 
-  for (const device of ["gpu", "cpu"] as const) {
+  // CPU first (most reliable). GPU only if CPU fails.
+  for (const device of ["cpu", "gpu"] as const) {
     if (isCancelled()) throw new Error("__cancelled__");
     try {
-      onProgress(device === "gpu" ? 14 : 18, device === "gpu" ? "Trying GPU…" : "Running on CPU…");
+      onProgress(device === "cpu" ? 15 : 20, device === "cpu" ? "Processing…" : "Trying GPU…");
       foreground = await removeBackground(prepared, { ...base, device });
       lastError = null;
       break;
