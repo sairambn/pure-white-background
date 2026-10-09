@@ -1,22 +1,21 @@
-export const MAX_BYTES = 10 * 1024 * 1024;
-export const MAX_EDGE = 1024; // smaller = much faster inference
-export const MAX_FILES = 15;
-export const ALLOWED = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp"]);
+import { MAX_EDGE } from "./batch";
 
-export type ItemStatus = "queued" | "processing" | "done" | "error";
-
-export type WorkItem = {
-  id: string;
-  file: File;
-  fileName: string;
-  originalUrl: string;
-  /** Transparent cutout (no white plate). */
-  cutoutUrl: string | null;
-  resultUrl: string | null;
-  status: ItemStatus;
-  progress: number;
-  message: string;
-};
+export {
+  MAX_BYTES,
+  MAX_EDGE,
+  MAX_FILES,
+  CONCURRENCY,
+  ALLOWED,
+  type ItemStatus,
+  type WorkItem,
+  type AcceptResult,
+  isAllowedImage,
+  createWorkItem,
+  acceptFiles,
+  releaseItemUrls,
+  releaseAll,
+  BatchStore,
+} from "./batch";
 
 /** Downscale very large images so mobile devices stay stable. */
 export async function prepareImage(file: File): Promise<File | Blob> {
@@ -46,25 +45,10 @@ export async function prepareImage(file: File): Promise<File | Blob> {
   ctx.drawImage(bitmap, 0, 0, w, h);
   bitmap.close();
 
-  // JPEG is faster to encode/decode for the model path
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob(resolve, "image/jpeg", 0.88),
   );
   return blob ?? file;
-}
-
-export function isAllowedImage(file: File): { ok: true } | { ok: false; reason: string } {
-  const type = (file.type || "").toLowerCase();
-  if (type.includes("heic") || type.includes("heif")) {
-    return { ok: false, reason: "HEIC is not supported. Export as JPG or PNG." };
-  }
-  if (!type.startsWith("image/") || (type && !ALLOWED.has(type) && type !== "image/jpg")) {
-    return { ok: false, reason: "Use PNG, JPG, or WebP only." };
-  }
-  if (file.size > MAX_BYTES) {
-    return { ok: false, reason: "Over 10 MB. Choose a smaller file." };
-  }
-  return { ok: true };
 }
 
 /**
@@ -211,7 +195,6 @@ export async function removeToWhite(
   try {
     foreground = await removeBackground(prepared, config);
   } catch {
-    // Fall back to CPU if GPU path fails
     foreground = await removeBackground(prepared, { ...config, device: "cpu" });
   }
   if (isCancelled()) throw new Error("__cancelled__");
