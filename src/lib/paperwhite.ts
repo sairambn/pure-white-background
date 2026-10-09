@@ -142,6 +142,10 @@ function getModel() {
   return modelModule;
 }
 
+/** CDN path for WASM + ONNX model assets (must match installed package version). */
+export const MODEL_PUBLIC_PATH =
+  "https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/";
+
 /** Warm the model on page load so the first photo is faster. */
 export async function preloadModel(): Promise<void> {
   try {
@@ -157,10 +161,11 @@ export async function preloadModel(): Promise<void> {
     if (!blob) return;
     await removeBackground(blob, {
       model: "isnet_quint8",
-      device: "gpu",
+      device: "cpu",
+      publicPath: MODEL_PUBLIC_PATH,
       output: { format: "image/png", quality: 0.9 },
     }).catch(() => {
-      // GPU may be unavailable — ignore; real runs will fall back
+      // Preload is best-effort
     });
   } catch {
     // Preload is best-effort
@@ -177,26 +182,49 @@ export async function removeToWhite(
   const prepared = await prepareImage(file);
   if (isCancelled()) throw new Error("__cancelled__");
 
-  onProgress(12, "Removing background…");
+  onProgress(12, "Loading model…");
   const { removeBackground } = await getModel();
   if (isCancelled()) throw new Error("__cancelled__");
 
-  const config = {
-    model: "isnet_quint8" as const,
-    device: "gpu" as const,
-    output: { format: "image/png" as const, quality: 0.95 },
-    progress: (_key: string, current: number, total: number) => {
-      if (isCancelled() || total <= 0) return;
-      onProgress(Math.min(80, 12 + Math.round((current / total) * 68)), "Removing background…");
-    },
+  const progress = (_key: string, current: number, total: number) => {
+    if (isCancelled() || total <= 0) return;
+    onProgress(Math.min(80, 12 + Math.round((current / total) * 68)), "Removing background…");
   };
 
-  let foreground: Blob;
-  try {
-    foreground = await removeBackground(prepared, config);
-  } catch {
-    foreground = await removeBackground(prepared, { ...config, device: "cpu" });
+  const base = {
+    model: "isnet_quint8" as const,
+    publicPath: MODEL_PUBLIC_PATH,
+    output: { format: "image/png" as const, quality: 0.95 },
+    progress,
+  };
+
+  let foreground: Blob | null = null;
+  let lastError: unknown;
+
+  for (const device of ["gpu", "cpu"] as const) {
+    if (isCancelled()) throw new Error("__cancelled__");
+    try {
+      onProgress(device === "gpu" ? 14 : 18, device === "gpu" ? "Trying GPU…" : "Running on CPU…");
+      foreground = await removeBackground(prepared, { ...base, device });
+      lastError = null;
+      break;
+    } catch (err) {
+      lastError = err;
+      foreground = null;
+    }
   }
+
+  if (!foreground) {
+    const raw = lastError instanceof Error ? lastError.message : String(lastError ?? "unknown");
+    if (/failed to fetch|networkerror|net::|load failed|ERR_/i.test(raw)) {
+      throw new Error("Could not download the AI model. Check your internet and try again.");
+    }
+    if (/publicPath|session|backend|wasm/i.test(raw)) {
+      throw new Error("Model failed to start in this browser. Try Chrome or Edge, or reload.");
+    }
+    throw new Error(raw.slice(0, 180) || "Background removal failed.");
+  }
+
   if (isCancelled()) throw new Error("__cancelled__");
 
   onProgress(88, "Finishing…");
