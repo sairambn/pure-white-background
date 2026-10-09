@@ -80,9 +80,7 @@ export function useBatchProcessor() {
         storeRef.current.update(item.id, {
           status: "error",
           progress: 0,
-          message: /network|fetch|failed to fetch/i.test(raw)
-            ? "Could not load the model. Check your connection."
-            : raw || "Background removal failed.",
+          message: raw || "Background removal failed.",
         });
         sync();
       }
