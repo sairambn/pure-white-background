@@ -1,5 +1,5 @@
 export const MAX_BYTES = 10 * 1024 * 1024;
-export const MAX_EDGE = 2048;
+export const MAX_EDGE = 1024; // smaller = much faster inference
 export const MAX_FILES = 15;
 export const ALLOWED = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp"]);
 
@@ -46,8 +46,9 @@ export async function prepareImage(file: File): Promise<File | Blob> {
   ctx.drawImage(bitmap, 0, 0, w, h);
   bitmap.close();
 
+  // JPEG is faster to encode/decode for the model path
   const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, file.type === "image/png" ? "image/png" : "image/jpeg", 0.95),
+    canvas.toBlob(resolve, "image/jpeg", 0.88),
   );
   return blob ?? file;
 }
@@ -74,7 +75,6 @@ function drawWatermark(ctx: CanvasRenderingContext2D, width: number, height: num
   const text = "© tnmeds";
   const shortSide = Math.min(width, height);
 
-  // Keep it small so the product stays the hero
   const fontSize = Math.round(Math.min(18, Math.max(10, shortSide * 0.018)));
   const marginX = Math.round(Math.max(16, shortSide * 0.028));
   const marginY = Math.round(Math.max(14, shortSide * 0.024));
@@ -83,7 +83,6 @@ function drawWatermark(ctx: CanvasRenderingContext2D, width: number, height: num
   ctx.font = `400 ${fontSize}px Inter, system-ui, -apple-system, "Segoe UI", sans-serif`;
   ctx.textAlign = "right";
   ctx.textBaseline = "bottom";
-  // Subtle tracking (supported in modern browsers)
   try {
     (ctx as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = `${Math.max(0.5, fontSize * 0.06)}px`;
   } catch {
@@ -93,15 +92,12 @@ function drawWatermark(ctx: CanvasRenderingContext2D, width: number, height: num
   const x = width - marginX;
   const y = height - marginY;
 
-  // Hairline white lift so the mark never looks muddy on #ffffff
   ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
   ctx.fillText(text, x, y - 0.5);
 
-  // Soft depth
   ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
   ctx.fillText(text, x + 0.5, y + 0.5);
 
-  // Main mark — quiet charcoal, premium opacity
   ctx.fillStyle = "rgba(40, 40, 40, 0.32)";
   ctx.fillText(text, x, y);
 
@@ -152,31 +148,75 @@ export type RemoveResult = {
   resultUrl: string;
 };
 
-/** Remove background on-device and place on pure white. */
+/** Shared model import — loaded once, then cached by the browser. */
+let modelModule: Promise<typeof import("@imgly/background-removal")> | null = null;
+
+function getModel() {
+  if (!modelModule) {
+    modelModule = import("@imgly/background-removal");
+  }
+  return modelModule;
+}
+
+/** Warm the model on page load so the first photo is faster. */
+export async function preloadModel(): Promise<void> {
+  try {
+    const { removeBackground } = await getModel();
+    const c = document.createElement("canvas");
+    c.width = 64;
+    c.height = 64;
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    ctx.fillStyle = "#888";
+    ctx.fillRect(0, 0, 64, 64);
+    const blob = await new Promise<Blob | null>((resolve) => c.toBlob(resolve, "image/png"));
+    if (!blob) return;
+    await removeBackground(blob, {
+      model: "isnet_quint8",
+      device: "gpu",
+      output: { format: "image/png", quality: 0.9 },
+    }).catch(() => {
+      // GPU may be unavailable — ignore; real runs will fall back
+    });
+  } catch {
+    // Preload is best-effort
+  }
+}
+
+/** Remove background on-device and place on pure white — optimized for speed. */
 export async function removeToWhite(
   file: File,
   onProgress: (p: number, msg: string) => void,
   isCancelled: () => boolean,
 ): Promise<RemoveResult> {
-  onProgress(4, "Preparing your photo…");
+  onProgress(5, "Preparing…");
   const prepared = await prepareImage(file);
   if (isCancelled()) throw new Error("__cancelled__");
 
-  onProgress(8, "Loading the private background-removal model…");
-  const { removeBackground } = await import("@imgly/background-removal");
+  onProgress(12, "Removing background…");
+  const { removeBackground } = await getModel();
   if (isCancelled()) throw new Error("__cancelled__");
 
-  const foreground = await removeBackground(prepared, {
-    model: "isnet_quint8",
-    output: { format: "image/png", quality: 1 },
+  const config = {
+    model: "isnet_quint8" as const,
+    device: "gpu" as const,
+    output: { format: "image/png" as const, quality: 0.95 },
     progress: (_key: string, current: number, total: number) => {
-      if (isCancelled()) return;
-      if (total > 0) onProgress(Math.min(75, 8 + Math.round((current / total) * 67)), "Removing background…");
+      if (isCancelled() || total <= 0) return;
+      onProgress(Math.min(80, 12 + Math.round((current / total) * 68)), "Removing background…");
     },
-  });
+  };
+
+  let foreground: Blob;
+  try {
+    foreground = await removeBackground(prepared, config);
+  } catch {
+    // Fall back to CPU if GPU path fails
+    foreground = await removeBackground(prepared, { ...config, device: "cpu" });
+  }
   if (isCancelled()) throw new Error("__cancelled__");
 
-  onProgress(84, "Placing on pure white…");
+  onProgress(88, "Finishing…");
   const cutoutUrl = URL.createObjectURL(foreground);
   try {
     if (isCancelled()) throw new Error("__cancelled__");
@@ -185,6 +225,7 @@ export async function removeToWhite(
       URL.revokeObjectURL(resultUrl);
       throw new Error("__cancelled__");
     }
+    onProgress(100, "Ready");
     return { cutoutUrl, resultUrl };
   } catch (error) {
     URL.revokeObjectURL(cutoutUrl);
