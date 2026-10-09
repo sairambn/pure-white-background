@@ -10,6 +10,7 @@ import {
   isAllowedImage,
   removeToWhite,
   downloadAllAsZip,
+  preloadModel,
   type WorkItem,
 } from "@/lib/paperwhite";
 
@@ -50,7 +51,9 @@ function Index() {
   const inputRef = useRef<HTMLInputElement>(null);
   const runIdRef = useRef(0);
   const processingRef = useRef(false);
+  const activeRef = useRef(0);
   const itemsRef = useRef<WorkItem[]>([]);
+  const CONCURRENCY = 3;
 
   const [items, setItems] = useState<WorkItem[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -60,6 +63,10 @@ function Index() {
   useEffect(() => {
     itemsRef.current = items;
   }, [items]);
+
+  useEffect(() => {
+    void preloadModel();
+  }, []);
 
   useEffect(
     () => () => {
@@ -76,6 +83,46 @@ function Index() {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   }, []);
 
+  const processOne = useCallback(
+    async (item: WorkItem, runId: number) => {
+      updateItem(item.id, { status: "processing", progress: 2, message: "Starting…" });
+      try {
+        const { cutoutUrl, resultUrl } = await removeToWhite(
+          item.file,
+          (progress, message) => {
+            if (runId !== runIdRef.current) return;
+            updateItem(item.id, { progress, message });
+          },
+          () => runId !== runIdRef.current,
+        );
+        if (runId !== runIdRef.current) {
+          URL.revokeObjectURL(cutoutUrl);
+          URL.revokeObjectURL(resultUrl);
+          return;
+        }
+        updateItem(item.id, {
+          status: "done",
+          progress: 100,
+          message: "Ready",
+          cutoutUrl,
+          resultUrl,
+        });
+      } catch (error) {
+        if (runId !== runIdRef.current) return;
+        const raw = error instanceof Error ? error.message : "Background removal failed.";
+        if (raw === "__cancelled__") return;
+        updateItem(item.id, {
+          status: "error",
+          progress: 0,
+          message: /network|fetch|failed to fetch/i.test(raw)
+            ? "Could not load the model. Check your connection."
+            : raw || "Background removal failed.",
+        });
+      }
+    },
+    [updateItem],
+  );
+
   const processQueue = useCallback(async () => {
     if (processingRef.current) return;
     processingRef.current = true;
@@ -83,49 +130,38 @@ function Index() {
 
     try {
       while (runId === runIdRef.current) {
-        const next = itemsRef.current.find((it) => it.status === "queued");
-        if (!next) break;
-
-        updateItem(next.id, { status: "processing", progress: 2, message: "Starting…" });
-
-        try {
-          const { cutoutUrl, resultUrl } = await removeToWhite(
-            next.file,
-            (progress, message) => {
-              if (runId !== runIdRef.current) return;
-              updateItem(next.id, { progress, message });
-            },
-            () => runId !== runIdRef.current,
-          );
-          if (runId !== runIdRef.current) {
-            URL.revokeObjectURL(cutoutUrl);
-            URL.revokeObjectURL(resultUrl);
-            break;
-          }
-          updateItem(next.id, {
-            status: "done",
-            progress: 100,
-            message: "Ready",
-            cutoutUrl,
-            resultUrl,
-          });
-        } catch (error) {
-          if (runId !== runIdRef.current) break;
-          const raw = error instanceof Error ? error.message : "Background removal failed.";
-          if (raw === "__cancelled__") break;
-          updateItem(next.id, {
-            status: "error",
-            progress: 0,
-            message: /network|fetch|failed to fetch/i.test(raw)
-              ? "Could not load the model. Check your connection."
-              : raw || "Background removal failed.",
-          });
+        const queued = itemsRef.current.filter((it) => it.status === "queued");
+        if (queued.length === 0 && activeRef.current === 0) break;
+        if (queued.length === 0) {
+          await new Promise((r) => setTimeout(r, 40));
+          continue;
         }
+
+        const slots = CONCURRENCY - activeRef.current;
+        if (slots <= 0) {
+          await new Promise((r) => setTimeout(r, 40));
+          continue;
+        }
+
+        const batch = queued.slice(0, slots);
+        await Promise.all(
+          batch.map(async (item) => {
+            activeRef.current += 1;
+            try {
+              await processOne(item, runId);
+            } finally {
+              activeRef.current = Math.max(0, activeRef.current - 1);
+            }
+          }),
+        );
       }
     } finally {
       processingRef.current = false;
+      if (runId === runIdRef.current && itemsRef.current.some((it) => it.status === "queued")) {
+        void processQueue();
+      }
     }
-  }, [updateItem]);
+  }, [processOne]);
 
   useEffect(() => {
     if (items.some((it) => it.status === "queued") && !processingRef.current) {
@@ -194,6 +230,7 @@ function Index() {
   const reset = () => {
     runIdRef.current += 1;
     processingRef.current = false;
+    activeRef.current = 0;
     for (const item of itemsRef.current) {
       URL.revokeObjectURL(item.originalUrl);
       if (item.cutoutUrl) URL.revokeObjectURL(item.cutoutUrl);
