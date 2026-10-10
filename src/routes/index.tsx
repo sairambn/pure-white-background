@@ -6,7 +6,7 @@ import mugOriginal from "@/assets/mug-original.jpg";
 import mugWhite from "@/assets/mug-white.jpg";
 import { Button } from "@/components/ui/button";
 import { useBatchProcessor } from "@/hooks/useBatchProcessor";
-import { MAX_FILES, type WorkItem } from "@/lib/batch";
+import { MAX_FILES, formatDuration, type WorkItem } from "@/lib/batch";
 
 const LIVE_URL = "https://paperwhite-bg.vercel.app";
 
@@ -298,11 +298,40 @@ function Index() {
 
         <footer className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5 font-mono text-[11px] text-muted-foreground">
           <p>Pure white is #ffffff. Every time.</p>
-          <p>Paperwhite · free forever · v1.0.2</p>
+          <p>Paperwhite · free forever · v1.0.5</p>
         </footer>
       </main>
     </div>
   );
+}
+
+function ProcessTimer({ item }: { item: WorkItem }) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (item.status !== "processing" || !item.startedAt) return;
+    const id = window.setInterval(() => setNow(Date.now()), 200);
+    return () => window.clearInterval(id);
+  }, [item.status, item.startedAt]);
+
+  if (item.status === "processing" && item.startedAt) {
+    const elapsed = Math.max(0, now - item.startedAt);
+    return (
+      <p className="font-mono text-[11px] text-muted-foreground" aria-live="polite">
+        Time: {formatDuration(elapsed)}
+      </p>
+    );
+  }
+
+  if (item.durationMs != null && (item.status === "done" || item.status === "error")) {
+    return (
+      <p className="font-mono text-[11px] text-muted-foreground">
+        {item.status === "done" ? "Processed in" : "Failed after"} {formatDuration(item.durationMs)}
+      </p>
+    );
+  }
+
+  return null;
 }
 
 function ItemCard({
@@ -355,6 +384,7 @@ function ItemCard({
             {item.status === "done" ? "Ready" : item.status === "error" ? "Error" : item.status === "queued" ? "Queued" : `${item.progress}%`}
           </span>
         </div>
+        <ProcessTimer item={item} />
         {(item.status === "processing" || item.status === "queued") && (
           <div className="h-1 overflow-hidden rounded-full bg-muted">
             <div className="h-full rounded-full bg-primary transition-[width] duration-500" style={{ width: `${item.status === "queued" ? 2 : item.progress}%` }} />
