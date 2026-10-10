@@ -5,6 +5,8 @@ import {
   CONCURRENCY,
   MAX_FILES,
   acceptFiles,
+  recordTimingSample,
+  type TimingWeights,
   type WorkItem,
 } from "@/lib/batch";
 import { downloadAllAsZip, preloadModel, removeToWhite } from "@/lib/paperwhite";
@@ -41,10 +43,13 @@ export function useBatchProcessor() {
 
   const processOne = useCallback(
     async (item: WorkItem, runId: number) => {
+      const startedAt = Date.now();
       storeRef.current.update(item.id, {
         status: "processing",
         progress: 2,
         message: "Starting…",
+        startedAt,
+        durationMs: null,
       });
       sync();
 
@@ -65,22 +70,27 @@ export function useBatchProcessor() {
           return;
         }
 
+        const durationMs = Date.now() - startedAt;
+        recordTimingSample(durationMs);
         storeRef.current.update(item.id, {
           status: "done",
           progress: 100,
           message: "Ready",
           cutoutUrl,
           resultUrl,
+          durationMs,
         });
         sync();
       } catch (error) {
         if (runId !== runIdRef.current) return;
         const raw = error instanceof Error ? error.message : "Background removal failed.";
         if (raw === "__cancelled__") return;
+        const durationMs = Date.now() - startedAt;
         storeRef.current.update(item.id, {
           status: "error",
           progress: 0,
           message: raw || "Background removal failed.",
+          durationMs,
         });
         sync();
       }
@@ -172,6 +182,8 @@ export function useBatchProcessor() {
         message: "Waiting…",
         cutoutUrl: null,
         resultUrl: null,
+        startedAt: null,
+        durationMs: null,
       });
       sync();
       void pump();
