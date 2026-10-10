@@ -24,6 +24,10 @@ export type WorkItem = {
   status: ItemStatus;
   progress: number;
   message: string;
+  /** When processing started (ms since epoch). */
+  startedAt: number | null;
+  /** Final processing duration in milliseconds (set when done/error). */
+  durationMs: number | null;
 };
 
 export type AcceptResult = {
@@ -60,6 +64,8 @@ export function createWorkItem(file: File): WorkItem {
     status: "queued",
     progress: 0,
     message: "Waiting…",
+    startedAt: null,
+    durationMs: null,
   };
 }
 
@@ -97,6 +103,60 @@ export function releaseAll(items: Iterable<WorkItem>): void {
 /** Immutable-friendly patch helper. */
 export function patchItem(item: WorkItem, patch: Partial<WorkItem>): WorkItem {
   return { ...item, ...patch };
+}
+
+/** localStorage key for processing-time weights (running averages). */
+export const TIMING_WEIGHTS_KEY = "paperwhite_timing_weights_v1";
+
+export type TimingWeights = {
+  /** Recent sample durations in ms (max 30). */
+  samples: number[];
+  /** Weighted average ms (more recent samples count more). */
+  avgMs: number;
+  count: number;
+};
+
+export function loadTimingWeights(): TimingWeights {
+  try {
+    const raw = localStorage.getItem(TIMING_WEIGHTS_KEY);
+    if (!raw) return { samples: [], avgMs: 0, count: 0 };
+    const parsed = JSON.parse(raw) as TimingWeights;
+    if (!Array.isArray(parsed.samples)) return { samples: [], avgMs: 0, count: 0 };
+    return parsed;
+  } catch {
+    return { samples: [], avgMs: 0, count: 0 };
+  }
+}
+
+/** Record a successful run; recent samples weigh more in avgMs. */
+export function recordTimingSample(durationMs: number): TimingWeights {
+  const prev = loadTimingWeights();
+  const samples = [...prev.samples, Math.round(durationMs)].slice(-30);
+  // Exponential-ish weights: last sample strongest
+  let weightSum = 0;
+  let valueSum = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const w = i + 1;
+    weightSum += w;
+    valueSum += samples[i] * w;
+  }
+  const avgMs = weightSum > 0 ? Math.round(valueSum / weightSum) : 0;
+  const next: TimingWeights = { samples, avgMs, count: samples.length };
+  try {
+    localStorage.setItem(TIMING_WEIGHTS_KEY, JSON.stringify(next));
+  } catch {
+    /* ignore quota */
+  }
+  return next;
+}
+
+export function formatDuration(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  const s = ms / 1000;
+  if (s < 60) return `${s.toFixed(1)} s`;
+  const m = Math.floor(s / 60);
+  const rem = s - m * 60;
+  return `${m}m ${rem.toFixed(0)}s`;
 }
 
 /**
