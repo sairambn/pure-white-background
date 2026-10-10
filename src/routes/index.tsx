@@ -57,6 +57,7 @@ function Index() {
     slotsLeft,
     addFiles,
     removeItem,
+    retryItem,
     reset,
     downloadZip,
   } = useBatchProcessor();
@@ -226,7 +227,12 @@ function Index() {
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     {items.map((item) => (
-                      <ItemCard key={item.id} item={item} onRemove={() => removeItem(item.id)} />
+                      <ItemCard
+                        key={item.id}
+                        item={item}
+                        onRemove={() => removeItem(item.id)}
+                        onRetry={() => retryItem(item.id)}
+                      />
                     ))}
                   </div>
 
@@ -292,14 +298,22 @@ function Index() {
 
         <footer className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5 font-mono text-[11px] text-muted-foreground">
           <p>Pure white is #ffffff. Every time.</p>
-          <p>Paperwhite · free forever</p>
+          <p>Paperwhite · free forever · v1.0.2</p>
         </footer>
       </main>
     </div>
   );
 }
 
-function ItemCard({ item, onRemove }: { item: WorkItem; onRemove: () => void }) {
+function ItemCard({
+  item,
+  onRemove,
+  onRetry,
+}: {
+  item: WorkItem;
+  onRemove: () => void;
+  onRetry: () => void;
+}) {
   return (
     <div className="overflow-hidden rounded-[12px] bg-background/60 ring-1 ring-border">
       <div className="relative grid grid-cols-2 gap-px bg-border">
@@ -347,7 +361,16 @@ function ItemCard({ item, onRemove }: { item: WorkItem; onRemove: () => void }) 
           </div>
         )}
         {item.status === "error" && (
-          <p className="text-xs text-destructive">{item.message}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xs text-destructive">{item.message}</p>
+            <button
+              type="button"
+              onClick={onRetry}
+              className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+            >
+              Retry
+            </button>
+          </div>
         )}
       </div>
     </div>
