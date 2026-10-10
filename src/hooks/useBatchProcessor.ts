@@ -160,6 +160,25 @@ export function useBatchProcessor() {
     [sync],
   );
 
+  const retryItem = useCallback(
+    (id: string) => {
+      const item = storeRef.current.get(id);
+      if (!item || item.status !== "error") return;
+      if (item.cutoutUrl) URL.revokeObjectURL(item.cutoutUrl);
+      if (item.resultUrl) URL.revokeObjectURL(item.resultUrl);
+      storeRef.current.update(id, {
+        status: "queued",
+        progress: 0,
+        message: "Waiting…",
+        cutoutUrl: null,
+        resultUrl: null,
+      });
+      sync();
+      void pump();
+    },
+    [pump, sync],
+  );
+
   const reset = useCallback(() => {
     runIdRef.current += 1;
     activeIdsRef.current.clear();
@@ -206,6 +225,7 @@ export function useBatchProcessor() {
     slotsLeft: Math.max(0, MAX_FILES - items.length),
     addFiles,
     removeItem,
+    retryItem,
     reset,
     downloadZip,
   };
