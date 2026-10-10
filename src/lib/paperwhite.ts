@@ -17,7 +17,7 @@ export {
   BatchStore,
 } from "./batch";
 
-/** Downscale very large images so mobile devices stay stable. */
+/** Downscale for fast inference (~3s target). Always clamp longest edge. */
 export async function prepareImage(file: File): Promise<File | Blob> {
   if (!file.type.startsWith("image/")) return file;
 
@@ -26,34 +26,36 @@ export async function prepareImage(file: File): Promise<File | Blob> {
 
   const { width, height } = bitmap;
   const longest = Math.max(width, height);
-  if (longest <= MAX_EDGE) {
+  const scale = longest > MAX_EDGE ? MAX_EDGE / longest : 1;
+  const w = Math.max(1, Math.round(width * scale));
+  const h = Math.max(1, Math.round(height * scale));
+
+  if (scale === 1 && (file.type === "image/jpeg" || file.type === "image/jpg") && file.size < 1.2 * 1024 * 1024) {
     bitmap.close();
     return file;
   }
 
-  const scale = MAX_EDGE / longest;
-  const w = Math.round(width * scale);
-  const h = Math.round(height * scale);
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d", { alpha: false });
   if (!ctx) {
     bitmap.close();
     return file;
   }
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "medium";
   ctx.drawImage(bitmap, 0, 0, w, h);
   bitmap.close();
 
   const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, "image/jpeg", 0.88),
+    canvas.toBlob(resolve, "image/jpeg", 0.82),
   );
   return blob ?? file;
 }
 
 /**
  * Premium © tnmeds watermark — bottom-right.
- * Small, light, tracked letter-spacing, soft lift on pure white.
  */
 function drawWatermark(ctx: CanvasRenderingContext2D, width: number, height: number) {
   const text = "© tnmeds";
@@ -111,7 +113,7 @@ export async function compositeOnWhite(cutoutUrl: string): Promise<string> {
   if (!context) throw new Error("Your browser could not create the image.");
 
   context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = "high";
+  context.imageSmoothingQuality = "medium";
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, width, height);
   context.drawImage(image, 0, 0);
@@ -149,10 +151,7 @@ function asImageFile(source: File | Blob, name = "photo.jpg"): File {
   return new File([source], name, { type });
 }
 
-/**
- * Warm the model on page load so the first photo is faster.
- * Uses library default publicPath (correct for the installed version).
- */
+/** Warm the model on page load so the first photo is faster. */
 export async function preloadModel(): Promise<void> {
   try {
     const { removeBackground } = await getModel();
@@ -168,6 +167,7 @@ export async function preloadModel(): Promise<void> {
     await removeBackground(asImageFile(blob, "warm.png"), {
       model: "isnet_quint8",
       device: "cpu",
+      publicPath: "https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/",
       output: { format: "image/png", quality: 0.9 },
     }).catch(() => {
       /* best-effort */
@@ -177,62 +177,62 @@ export async function preloadModel(): Promise<void> {
   }
 }
 
-/** Remove background on-device and place on pure white. */
+/** Remove background on-device — tuned for ~3s/photo after model is warm. */
 export async function removeToWhite(
   file: File,
   onProgress: (p: number, msg: string) => void,
   isCancelled: () => boolean,
 ): Promise<RemoveResult> {
-  onProgress(5, "Preparing…");
+  onProgress(8, "Preparing…");
   const prepared = asImageFile(await prepareImage(file), file.name || "photo.jpg");
   if (isCancelled()) throw new Error("__cancelled__");
 
-  onProgress(12, "Loading model…");
+  onProgress(15, "Removing background…");
   const { removeBackground } = await getModel();
   if (isCancelled()) throw new Error("__cancelled__");
 
-  onProgress(18, "Removing background…");
+  const progress = (_key: string, current: number, total: number) => {
+    if (isCancelled() || total <= 0) return;
+    onProgress(Math.min(88, 15 + Math.round((current / total) * 73)), "Removing background…");
+  };
 
-  let foreground: Blob;
-  try {
-    foreground = await removeBackground(prepared, {
-      model: "isnet_quint8",
-      device: "cpu",
-      output: { format: "image/png", quality: 0.95 },
-      progress: (_key: string, current: number, total: number) => {
-        if (isCancelled() || total <= 0) return;
-        onProgress(Math.min(85, 18 + Math.round((current / total) * 67)), "Removing background…");
-      },
-    });
-  } catch (err) {
-    const raw = err instanceof Error ? err.message : String(err ?? "unknown");
+  const base = {
+    model: "isnet_quint8" as const,
+    publicPath: "https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/",
+    output: { format: "image/png" as const, quality: 0.9 },
+    progress,
+  };
+
+  let foreground: Blob | null = null;
+  let lastError: unknown;
+
+  // GPU is much faster when available; fall back to CPU
+  for (const device of ["gpu", "cpu"] as const) {
+    if (isCancelled()) throw new Error("__cancelled__");
     try {
-      onProgress(20, "Retrying model…");
-      foreground = await removeBackground(prepared, {
-        model: "isnet_quint8",
-        device: "cpu",
-        publicPath: "https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/",
-        output: { format: "image/png", quality: 0.95 },
-        progress: (_key: string, current: number, total: number) => {
-          if (isCancelled() || total <= 0) return;
-          onProgress(Math.min(85, 20 + Math.round((current / total) * 65)), "Removing background…");
-        },
-      });
-    } catch (err2) {
-      const raw2 = err2 instanceof Error ? err2.message : raw;
-      if (/failed to fetch|networkerror|net::|load failed|ERR_|Resource metadata/i.test(raw2)) {
-        throw new Error("Could not download the AI model. Check your internet, disable ad-block for this site, then retry.");
-      }
-      if (/publicPath|session|backend|wasm|offset is out of bounds/i.test(raw2)) {
-        throw new Error("Model failed in this browser. Please use Chrome or Edge and try again.");
-      }
-      throw new Error((raw2 || "Background removal failed.").slice(0, 200));
+      foreground = await removeBackground(prepared, { ...base, device });
+      lastError = null;
+      break;
+    } catch (err) {
+      lastError = err;
+      foreground = null;
     }
+  }
+
+  if (!foreground) {
+    const raw = lastError instanceof Error ? lastError.message : String(lastError ?? "unknown");
+    if (/failed to fetch|networkerror|net::|load failed|ERR_|Resource metadata/i.test(raw)) {
+      throw new Error("Could not download the AI model. Check your internet, disable ad-block for this site, then retry.");
+    }
+    if (/publicPath|session|backend|wasm|offset is out of bounds/i.test(raw)) {
+      throw new Error("Model failed in this browser. Please use Chrome or Edge and try again.");
+    }
+    throw new Error((raw || "Background removal failed.").slice(0, 200));
   }
 
   if (isCancelled()) throw new Error("__cancelled__");
 
-  onProgress(90, "Finishing…");
+  onProgress(92, "Finishing…");
   const cutoutUrl = URL.createObjectURL(foreground);
   try {
     if (isCancelled()) throw new Error("__cancelled__");
