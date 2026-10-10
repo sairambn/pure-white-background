@@ -7,9 +7,9 @@
  */
 
 export const MAX_BYTES = 10 * 1024 * 1024;
-export const MAX_EDGE = 640; // ~3s target on modern devices
+export const MAX_EDGE = 512; // smaller = much faster on CPU
 export const MAX_FILES = 15;
-export const CONCURRENCY = 3;
+export const CONCURRENCY = 1; // sequential is faster than parallel on CPU/ONNX
 export const ALLOWED = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp"]);
 
 export type ItemStatus = "queued" | "processing" | "done" | "error";
