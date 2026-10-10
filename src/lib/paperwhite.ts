@@ -17,7 +17,7 @@ export {
   BatchStore,
 } from "./batch";
 
-/** Downscale for fast inference (~3s target). Always clamp longest edge. */
+/** Downscale for fast inference. Clamp longest edge. */
 export async function prepareImage(file: File): Promise<File | Blob> {
   if (!file.type.startsWith("image/")) return file;
 
@@ -54,9 +54,6 @@ export async function prepareImage(file: File): Promise<File | Blob> {
   return blob ?? file;
 }
 
-/**
- * Premium © tnmeds watermark — bottom-right.
- */
 function drawWatermark(ctx: CanvasRenderingContext2D, width: number, height: number) {
   const text = "© tnmeds";
   const shortSide = Math.min(width, height);
@@ -72,7 +69,7 @@ function drawWatermark(ctx: CanvasRenderingContext2D, width: number, height: num
   try {
     (ctx as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = `${Math.max(0.5, fontSize * 0.06)}px`;
   } catch {
-    // ignore if unsupported
+    // ignore
   }
 
   const x = width - marginX;
@@ -80,13 +77,10 @@ function drawWatermark(ctx: CanvasRenderingContext2D, width: number, height: num
 
   ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
   ctx.fillText(text, x, y - 0.5);
-
   ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
   ctx.fillText(text, x + 0.5, y + 0.5);
-
   ctx.fillStyle = "rgba(40, 40, 40, 0.32)";
   ctx.fillText(text, x, y);
-
   ctx.restore();
 }
 
@@ -100,7 +94,6 @@ async function loadImage(url: string): Promise<HTMLImageElement> {
   return image;
 }
 
-/** Place a transparent cutout on pure white + watermark. */
 export async function compositeOnWhite(cutoutUrl: string): Promise<string> {
   const image = await loadImage(cutoutUrl);
   const width = image.naturalWidth;
@@ -134,8 +127,9 @@ export type RemoveResult = {
   resultUrl: string;
 };
 
-/** Shared model import — loaded once, then cached by the browser. */
 let modelModule: Promise<typeof import("@imgly/background-removal")> | null = null;
+/** Remember which device worked so we never burn 30s on a dead GPU path again. */
+let preferredDevice: "gpu" | "cpu" | null = null;
 
 function getModel() {
   if (!modelModule) {
@@ -144,14 +138,27 @@ function getModel() {
   return modelModule;
 }
 
-/** Build a File the model always accepts (Blob alone can fail in some browsers). */
+function canUseGpu(): boolean {
+  try {
+    return typeof navigator !== "undefined" && "gpu" in navigator && !!(navigator as Navigator & { gpu?: unknown }).gpu;
+  } catch {
+    return false;
+  }
+}
+
+function pickDeviceOrder(): Array<"gpu" | "cpu"> {
+  if (preferredDevice === "cpu") return ["cpu"];
+  if (preferredDevice === "gpu") return ["gpu", "cpu"];
+  if (canUseGpu()) return ["gpu", "cpu"];
+  return ["cpu"];
+}
+
 function asImageFile(source: File | Blob, name = "photo.jpg"): File {
   if (source instanceof File) return source;
   const type = source.type || "image/jpeg";
   return new File([source], name, { type });
 }
 
-/** Warm the model on page load so the first photo is faster. */
 export async function preloadModel(): Promise<void> {
   try {
     const { removeBackground } = await getModel();
@@ -164,36 +171,43 @@ export async function preloadModel(): Promise<void> {
     ctx.fillRect(0, 0, 64, 64);
     const blob = await new Promise<Blob | null>((resolve) => c.toBlob(resolve, "image/png"));
     if (!blob) return;
-    await removeBackground(asImageFile(blob, "warm.png"), {
-      model: "isnet_quint8",
-      device: "cpu",
-      publicPath: "https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/",
-      output: { format: "image/png", quality: 0.9 },
-    }).catch(() => {
-      /* best-effort */
-    });
+
+    const order = pickDeviceOrder();
+    for (const device of order) {
+      try {
+        await removeBackground(asImageFile(blob, "warm.png"), {
+          model: "isnet_quint8",
+          device,
+          publicPath: "https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/",
+          output: { format: "image/png", quality: 0.85 },
+        });
+        preferredDevice = device;
+        break;
+      } catch {
+        if (device === "gpu") preferredDevice = "cpu";
+      }
+    }
   } catch {
     /* best-effort */
   }
 }
 
-/** Remove background on-device — tuned for ~3s/photo after model is warm. */
 export async function removeToWhite(
   file: File,
   onProgress: (p: number, msg: string) => void,
   isCancelled: () => boolean,
 ): Promise<RemoveResult> {
-  onProgress(8, "Preparing…");
+  onProgress(5, "Preparing…");
   const prepared = asImageFile(await prepareImage(file), file.name || "photo.jpg");
   if (isCancelled()) throw new Error("__cancelled__");
 
-  onProgress(15, "Removing background…");
+  onProgress(12, "Removing background…");
   const { removeBackground } = await getModel();
   if (isCancelled()) throw new Error("__cancelled__");
 
   const progress = (_key: string, current: number, total: number) => {
     if (isCancelled() || total <= 0) return;
-    onProgress(Math.min(88, 15 + Math.round((current / total) * 73)), "Removing background…");
+    onProgress(Math.min(90, 12 + Math.round((current / total) * 78)), "Removing background…");
   };
 
   const base = {
@@ -205,17 +219,19 @@ export async function removeToWhite(
 
   let foreground: Blob | null = null;
   let lastError: unknown;
+  const order = pickDeviceOrder();
 
-  // GPU is much faster when available; fall back to CPU
-  for (const device of ["gpu", "cpu"] as const) {
+  for (const device of order) {
     if (isCancelled()) throw new Error("__cancelled__");
     try {
       foreground = await removeBackground(prepared, { ...base, device });
+      preferredDevice = device;
       lastError = null;
       break;
     } catch (err) {
       lastError = err;
       foreground = null;
+      if (device === "gpu") preferredDevice = "cpu";
     }
   }
 
@@ -232,7 +248,7 @@ export async function removeToWhite(
 
   if (isCancelled()) throw new Error("__cancelled__");
 
-  onProgress(92, "Finishing…");
+  onProgress(93, "Finishing…");
   const cutoutUrl = URL.createObjectURL(foreground);
   try {
     if (isCancelled()) throw new Error("__cancelled__");
@@ -249,7 +265,6 @@ export async function removeToWhite(
   }
 }
 
-/** CRC32 for ZIP (STORE method). */
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256);
   for (let i = 0; i < 256; i++) {
@@ -294,7 +309,6 @@ function concat(parts: Uint8Array[]): Uint8Array {
   return out;
 }
 
-/** Build a ZIP (STORE) from named binary files — no extra dependency. */
 export function buildZip(files: { name: string; data: Uint8Array }[]): Blob {
   const localParts: Uint8Array[] = [];
   const centralParts: Uint8Array[] = [];
@@ -362,7 +376,6 @@ export function buildZip(files: { name: string; data: Uint8Array }[]): Blob {
   return new Blob([zipBytes], { type: "application/zip" });
 }
 
-/** Download every ready white PNG as one ZIP. */
 export async function downloadAllAsZip(
   items: { fileName: string; resultUrl: string }[],
 ): Promise<void> {
