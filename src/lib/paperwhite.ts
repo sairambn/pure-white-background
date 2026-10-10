@@ -142,11 +142,17 @@ function getModel() {
   return modelModule;
 }
 
-/** CDN path for WASM + ONNX model assets (must match installed package version). */
-export const MODEL_PUBLIC_PATH =
-  "https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/";
+/** Build a File the model always accepts (Blob alone can fail in some browsers). */
+function asImageFile(source: File | Blob, name = "photo.jpg"): File {
+  if (source instanceof File) return source;
+  const type = source.type || "image/jpeg";
+  return new File([source], name, { type });
+}
 
-/** Warm the model on page load so the first photo is faster. */
+/**
+ * Warm the model on page load so the first photo is faster.
+ * Uses library default publicPath (correct for the installed version).
+ */
 export async function preloadModel(): Promise<void> {
   try {
     const { removeBackground } = await getModel();
@@ -159,76 +165,74 @@ export async function preloadModel(): Promise<void> {
     ctx.fillRect(0, 0, 64, 64);
     const blob = await new Promise<Blob | null>((resolve) => c.toBlob(resolve, "image/png"));
     if (!blob) return;
-    await removeBackground(blob, {
+    await removeBackground(asImageFile(blob, "warm.png"), {
       model: "isnet_quint8",
       device: "cpu",
-      publicPath: MODEL_PUBLIC_PATH,
       output: { format: "image/png", quality: 0.9 },
     }).catch(() => {
-      // Preload is best-effort
+      /* best-effort */
     });
   } catch {
-    // Preload is best-effort
+    /* best-effort */
   }
 }
 
-/** Remove background on-device and place on pure white — optimized for speed. */
+/** Remove background on-device and place on pure white. */
 export async function removeToWhite(
   file: File,
   onProgress: (p: number, msg: string) => void,
   isCancelled: () => boolean,
 ): Promise<RemoveResult> {
   onProgress(5, "Preparing…");
-  const prepared = await prepareImage(file);
+  const prepared = asImageFile(await prepareImage(file), file.name || "photo.jpg");
   if (isCancelled()) throw new Error("__cancelled__");
 
   onProgress(12, "Loading model…");
   const { removeBackground } = await getModel();
   if (isCancelled()) throw new Error("__cancelled__");
 
-  const progress = (_key: string, current: number, total: number) => {
-    if (isCancelled() || total <= 0) return;
-    onProgress(Math.min(80, 12 + Math.round((current / total) * 68)), "Removing background…");
-  };
+  onProgress(18, "Removing background…");
 
-  const base = {
-    model: "isnet_quint8" as const,
-    publicPath: MODEL_PUBLIC_PATH,
-    output: { format: "image/png" as const, quality: 0.95 },
-    progress,
-  };
-
-  let foreground: Blob | null = null;
-  let lastError: unknown;
-
-  // CPU first (most reliable). GPU only if CPU fails.
-  for (const device of ["cpu", "gpu"] as const) {
-    if (isCancelled()) throw new Error("__cancelled__");
+  let foreground: Blob;
+  try {
+    foreground = await removeBackground(prepared, {
+      model: "isnet_quint8",
+      device: "cpu",
+      output: { format: "image/png", quality: 0.95 },
+      progress: (_key: string, current: number, total: number) => {
+        if (isCancelled() || total <= 0) return;
+        onProgress(Math.min(85, 18 + Math.round((current / total) * 67)), "Removing background…");
+      },
+    });
+  } catch (err) {
+    const raw = err instanceof Error ? err.message : String(err ?? "unknown");
     try {
-      onProgress(device === "cpu" ? 15 : 20, device === "cpu" ? "Processing…" : "Trying GPU…");
-      foreground = await removeBackground(prepared, { ...base, device });
-      lastError = null;
-      break;
-    } catch (err) {
-      lastError = err;
-      foreground = null;
+      onProgress(20, "Retrying model…");
+      foreground = await removeBackground(prepared, {
+        model: "isnet_quint8",
+        device: "cpu",
+        publicPath: "https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/",
+        output: { format: "image/png", quality: 0.95 },
+        progress: (_key: string, current: number, total: number) => {
+          if (isCancelled() || total <= 0) return;
+          onProgress(Math.min(85, 20 + Math.round((current / total) * 65)), "Removing background…");
+        },
+      });
+    } catch (err2) {
+      const raw2 = err2 instanceof Error ? err2.message : raw;
+      if (/failed to fetch|networkerror|net::|load failed|ERR_|Resource metadata/i.test(raw2)) {
+        throw new Error("Could not download the AI model. Check your internet, disable ad-block for this site, then retry.");
+      }
+      if (/publicPath|session|backend|wasm|offset is out of bounds/i.test(raw2)) {
+        throw new Error("Model failed in this browser. Please use Chrome or Edge and try again.");
+      }
+      throw new Error((raw2 || "Background removal failed.").slice(0, 200));
     }
-  }
-
-  if (!foreground) {
-    const raw = lastError instanceof Error ? lastError.message : String(lastError ?? "unknown");
-    if (/failed to fetch|networkerror|net::|load failed|ERR_/i.test(raw)) {
-      throw new Error("Could not download the AI model. Check your internet and try again.");
-    }
-    if (/publicPath|session|backend|wasm/i.test(raw)) {
-      throw new Error("Model failed to start in this browser. Try Chrome or Edge, or reload.");
-    }
-    throw new Error(raw.slice(0, 180) || "Background removal failed.");
   }
 
   if (isCancelled()) throw new Error("__cancelled__");
 
-  onProgress(88, "Finishing…");
+  onProgress(90, "Finishing…");
   const cutoutUrl = URL.createObjectURL(foreground);
   try {
     if (isCancelled()) throw new Error("__cancelled__");
