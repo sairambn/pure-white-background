@@ -17,7 +17,9 @@ export {
   BatchStore,
 } from "./batch";
 
-/** Downscale for fast inference. Clamp longest edge. */
+const DEVICE_KEY = "paperwhite_preferred_device_v1";
+
+/** Downscale for fast inference. Clamp longest edge. Prefer high-quality resize. */
 export async function prepareImage(file: File): Promise<File | Blob> {
   if (!file.type.startsWith("image/")) return file;
 
@@ -30,7 +32,8 @@ export async function prepareImage(file: File): Promise<File | Blob> {
   const w = Math.max(1, Math.round(width * scale));
   const h = Math.max(1, Math.round(height * scale));
 
-  if (scale === 1 && (file.type === "image/jpeg" || file.type === "image/jpg") && file.size < 1.2 * 1024 * 1024) {
+  // Skip re-encode when already small and JPEG — saves time and quality loss.
+  if (scale === 1 && (file.type === "image/jpeg" || file.type === "image/jpg") && file.size < 1.5 * 1024 * 1024) {
     bitmap.close();
     return file;
   }
@@ -44,12 +47,12 @@ export async function prepareImage(file: File): Promise<File | Blob> {
     return file;
   }
   ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "medium";
+  ctx.imageSmoothingQuality = "high";
   ctx.drawImage(bitmap, 0, 0, w, h);
   bitmap.close();
 
   const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, "image/jpeg", 0.82),
+    canvas.toBlob(resolve, "image/jpeg", 0.88),
   );
   return blob ?? file;
 }
@@ -58,16 +61,16 @@ function drawWatermark(ctx: CanvasRenderingContext2D, width: number, height: num
   const text = "© tnmeds";
   const shortSide = Math.min(width, height);
 
-  const fontSize = Math.round(Math.min(18, Math.max(10, shortSide * 0.018)));
-  const marginX = Math.round(Math.max(16, shortSide * 0.028));
-  const marginY = Math.round(Math.max(14, shortSide * 0.024));
+  const fontSize = Math.round(Math.min(16, Math.max(9, shortSide * 0.016)));
+  const marginX = Math.round(Math.max(14, shortSide * 0.024));
+  const marginY = Math.round(Math.max(12, shortSide * 0.02));
 
   ctx.save();
   ctx.font = `400 ${fontSize}px Inter, system-ui, -apple-system, "Segoe UI", sans-serif`;
   ctx.textAlign = "right";
   ctx.textBaseline = "bottom";
   try {
-    (ctx as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = `${Math.max(0.5, fontSize * 0.06)}px`;
+    (ctx as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = `${Math.max(0.4, fontSize * 0.05)}px`;
   } catch {
     // ignore
   }
@@ -75,11 +78,10 @@ function drawWatermark(ctx: CanvasRenderingContext2D, width: number, height: num
   const x = width - marginX;
   const y = height - marginY;
 
-  ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-  ctx.fillText(text, x, y - 0.5);
-  ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
-  ctx.fillText(text, x + 0.5, y + 0.5);
-  ctx.fillStyle = "rgba(40, 40, 40, 0.32)";
+  // Soft shadow + light fill so it stays readable on both light and dark subjects
+  ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
+  ctx.fillText(text, x + 0.6, y + 0.6);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
   ctx.fillText(text, x, y);
   ctx.restore();
 }
@@ -106,7 +108,7 @@ export async function compositeOnWhite(cutoutUrl: string): Promise<string> {
   if (!context) throw new Error("Your browser could not create the image.");
 
   context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = "medium";
+  context.imageSmoothingQuality = "high";
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, width, height);
   context.drawImage(image, 0, 0);
@@ -128,8 +130,27 @@ export type RemoveResult = {
 };
 
 let modelModule: Promise<typeof import("@imgly/background-removal")> | null = null;
-/** Remember which device worked so we never burn 30s on a dead GPU path again. */
+/** Remember which device worked so we never burn time on a dead GPU path again. */
 let preferredDevice: "gpu" | "cpu" | null = null;
+
+function loadPreferredDevice(): "gpu" | "cpu" | null {
+  try {
+    const v = localStorage.getItem(DEVICE_KEY);
+    if (v === "gpu" || v === "cpu") return v;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function savePreferredDevice(device: "gpu" | "cpu") {
+  preferredDevice = device;
+  try {
+    localStorage.setItem(DEVICE_KEY, device);
+  } catch {
+    /* ignore */
+  }
+}
 
 function getModel() {
   if (!modelModule) {
@@ -147,6 +168,7 @@ function canUseGpu(): boolean {
 }
 
 function pickDeviceOrder(): Array<"gpu" | "cpu"> {
+  if (!preferredDevice) preferredDevice = loadPreferredDevice();
   if (preferredDevice === "cpu") return ["cpu"];
   if (preferredDevice === "gpu") return ["gpu", "cpu"];
   if (canUseGpu()) return ["gpu", "cpu"];
@@ -181,10 +203,10 @@ export async function preloadModel(): Promise<void> {
           publicPath: "https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/",
           output: { format: "image/png", quality: 0.85 },
         });
-        preferredDevice = device;
+        savePreferredDevice(device);
         break;
       } catch {
-        if (device === "gpu") preferredDevice = "cpu";
+        if (device === "gpu") savePreferredDevice("cpu");
       }
     }
   } catch {
@@ -197,23 +219,23 @@ export async function removeToWhite(
   onProgress: (p: number, msg: string) => void,
   isCancelled: () => boolean,
 ): Promise<RemoveResult> {
-  onProgress(5, "Preparing…");
+  onProgress(4, "Preparing…");
   const prepared = asImageFile(await prepareImage(file), file.name || "photo.jpg");
   if (isCancelled()) throw new Error("__cancelled__");
 
-  onProgress(12, "Removing background…");
+  onProgress(10, "Removing background…");
   const { removeBackground } = await getModel();
   if (isCancelled()) throw new Error("__cancelled__");
 
   const progress = (_key: string, current: number, total: number) => {
     if (isCancelled() || total <= 0) return;
-    onProgress(Math.min(90, 12 + Math.round((current / total) * 78)), "Removing background…");
+    onProgress(Math.min(88, 10 + Math.round((current / total) * 78)), "Removing background…");
   };
 
   const base = {
     model: "isnet_quint8" as const,
     publicPath: "https://staticimgly.com/@imgly/background-removal-data/1.7.0/dist/",
-    output: { format: "image/png" as const, quality: 0.9 },
+    output: { format: "image/png" as const, quality: 0.92 },
     progress,
   };
 
@@ -225,13 +247,13 @@ export async function removeToWhite(
     if (isCancelled()) throw new Error("__cancelled__");
     try {
       foreground = await removeBackground(prepared, { ...base, device });
-      preferredDevice = device;
+      savePreferredDevice(device);
       lastError = null;
       break;
     } catch (err) {
       lastError = err;
       foreground = null;
-      if (device === "gpu") preferredDevice = "cpu";
+      if (device === "gpu") savePreferredDevice("cpu");
     }
   }
 
@@ -248,7 +270,7 @@ export async function removeToWhite(
 
   if (isCancelled()) throw new Error("__cancelled__");
 
-  onProgress(93, "Finishing…");
+  onProgress(92, "Finishing…");
   const cutoutUrl = URL.createObjectURL(foreground);
   try {
     if (isCancelled()) throw new Error("__cancelled__");
