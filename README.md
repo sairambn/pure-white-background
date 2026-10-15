@@ -29,7 +29,7 @@ That’s it. Desktop and mobile.
 | **Output** | PNG on solid pure white |
 | **Privacy** | On-device only — nothing uploaded |
 | **Paste** | Ctrl/Cmd + V |
-| **Mark** | `© tnmeds` bottom-right |
+| **Mark** | Quiet `© tnmeds` bottom-right |
 
 No account. No credits. No paywall. Free for life.
 
@@ -48,6 +48,7 @@ Most background tools upload your photos to a server. This one does not.
 - Processing stays in the browser
 - Same white result every time (`#ffffff`)
 - One clean ZIP download — no clutter
+- Optimized for speed (SharedArrayBuffer, preferred device caching, smart downscale)
 
 Built for product listings, catalogs, and store photos.
 
@@ -61,7 +62,7 @@ Built for product listings, catalogs, and store photos.
 | Style | Tailwind CSS v4 |
 | Build | Vite |
 | Model | `@imgly/background-removal` (`isnet_quint8`) |
-| Host | Vercel |
+| Host | Vercel (COOP/COEP for fast WASM) |
 
 ---
 
@@ -85,9 +86,11 @@ Node 18+ required.
 ## Notes
 
 - Output is always PNG on `#ffffff`
-- Large images are scaled (max edge 2048 px) for mobile stability
+- Large images are scaled (max edge 768 px) for speed + quality balance
 - HEIC is not supported — export as JPG or PNG first
 - Each export has a quiet `© tnmeds` mark in the bottom-right corner
+- First run downloads the model (~40 MB); later runs are much faster
+- GPU is preferred when available; device choice is remembered
 
 ---
 
